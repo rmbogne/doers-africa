@@ -73,12 +73,12 @@ func seedDummyData() {
 	DB.RSVPs = append(DB.RSVPs, models.RSVP{EventID: 1, CustomerID: 1})
 }
 
-func (s *Store) RegisterDoer(name, email, password string) {
+func (s *Store) RegisterDoer(doer models.Doer) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	id := s.nextDoerID
+	doer.ID = s.nextDoerID
 	s.nextDoerID++
-	s.Doers[id] = models.Doer{ID: id, Name: name, Email: email, Password: password}
+	s.Doers[doer.ID] = doer
 }
 
 func (s *Store) RegisterCustomer(name, email, password string) {

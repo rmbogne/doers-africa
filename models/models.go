@@ -1,10 +1,18 @@
 package models
 
 type Doer struct {
-	ID       int
-	Name     string
-	Email    string
-	Password string // simplified, plaintext for demo
+	ID          int
+	Name        string
+	Email       string
+	Password    string // simplified, plaintext for demo
+	Category    string
+	Description string
+	ZipCode     string
+	Radius      int
+	Facebook    string
+	TikTok      string
+	Instagram   string
+	FlyerURL    string
 }
 
 type Customer struct {

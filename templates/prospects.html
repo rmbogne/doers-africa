@@ -10,8 +10,28 @@
     <div class="grid-listing">
         {{range .Doers}}
         <div class="card">
-            <h3>{{.Name}}</h3>
-            <p class="text-muted">✉️ {{.Email}}</p>
+            {{if .FlyerURL}}
+            <img src="{{.FlyerURL}}" alt="{{.Name}} Flyer" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
+            {{end}}
+            <h3>{{.Name}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">{{.Category}}</span></h3>
+            <p class="text-muted" style="margin: 0.5rem 0;">✉️ {{.Email}}</p>
+            {{if .Description}}
+            <p style="margin-bottom: 0.5rem;">{{.Description}}</p>
+            {{end}}
+            {{if .ZipCode}}
+            <p class="text-muted" style="font-size:0.9rem;">📍 Zip: {{.ZipCode}} (within {{.Radius}} miles)</p>
+            {{end}}
+            <div style="margin-top: 1rem; display:flex; gap:0.5rem;">
+                {{if .Facebook}}
+                <a href="{{.Facebook}}" target="_blank" style="color:var(--text-main); text-decoration:none;">📱 FB</a>
+                {{end}}
+                {{if .Instagram}}
+                <a href="{{.Instagram}}" target="_blank" style="color:var(--text-main); text-decoration:none;">📸 Insta</a>
+                {{end}}
+                {{if .TikTok}}
+                <a href="{{.TikTok}}" target="_blank" style="color:var(--text-main); text-decoration:none;">🎵 TikTok</a>
+                {{end}}
+            </div>
         </div>
         {{end}}
     </div>

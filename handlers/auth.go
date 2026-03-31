@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
 
@@ -49,14 +54,49 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		render(w, r, "register.html", PageData{})
 	} else if r.Method == http.MethodPost {
-		r.ParseForm()
+		r.ParseMultipartForm(10 << 20) // 10 MB limit for file uploads
 		role := r.FormValue("role")
 		name := r.FormValue("name")
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 
 		if role == "doer" {
-			store.DB.RegisterDoer(name, email, password)
+			category := r.FormValue("category")
+			description := r.FormValue("description")
+			zipcode := r.FormValue("zipcode")
+			radius, _ := strconv.Atoi(r.FormValue("radius"))
+			facebook := r.FormValue("facebook")
+			tiktok := r.FormValue("tiktok")
+			instagram := r.FormValue("instagram")
+
+			flyerURL := ""
+			file, handler, err := r.FormFile("flyer")
+			if err == nil {
+				defer file.Close()
+				filename := time.Now().Format("20060102150405") + "_" + handler.Filename
+				os.MkdirAll("static/img", os.ModePerm) // Ensure directory exists
+				dst, _ := os.Create(filepath.Join("static", "img", filename))
+				if dst != nil {
+					defer dst.Close()
+					io.Copy(dst, file)
+					flyerURL = "/static/img/" + filename
+				}
+			}
+
+			doer := models.Doer{
+				Name:        name,
+				Email:       email,
+				Password:    password,
+				Category:    category,
+				Description: description,
+				ZipCode:     zipcode,
+				Radius:      radius,
+				Facebook:    facebook,
+				TikTok:      tiktok,
+				Instagram:   instagram,
+				FlyerURL:    flyerURL,
+			}
+			store.DB.RegisterDoer(doer)
 		} else {
 			store.DB.RegisterCustomer(name, email, password)
 		}
