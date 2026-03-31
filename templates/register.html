@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="form-container">
+    <h2>Create an Account</h2>
+    <p class="text-muted" style="margin-bottom: 2rem;">Join the African Doers network</p>
+    <form action="/register" method="POST">
+        <div class="form-group">
+            <label for="role">I want to:</label>
+            <select name="role" id="role" class="form-control" required>
+                <option value="customer">Attend Events / Hire Services (Customer)</option>
+                <option value="doer">Host Events / Offer Services (Doer)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="name">Full Name or Company Name</label>
+            <input type="text" id="name" name="name" class="form-control" required placeholder="Your Name">
+        </div>
+        <div class="form-group">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" class="form-control" required placeholder="you@domain.com">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" required placeholder="Create a strong password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+    </form>
+    <p style="margin-top: 1.5rem; text-align: center; color: var(--text-muted);">
+        Already have an account? <a href="/login" style="color: var(--primary-color);">Login here</a>
+    </p>
+</div>
+{{end}}

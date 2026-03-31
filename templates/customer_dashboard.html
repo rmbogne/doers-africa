@@ -1,0 +1,21 @@
+{{define "content"}}
+<div class="dashboard-header" style="margin-bottom: 2rem;">
+    <h2>My Upcoming RSVPs</h2>
+</div>
+
+<div class="grid-listing">
+    {{range .Events}}
+    <div class="card">
+        <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
+        <h3>{{.Title}}</h3>
+        <p style="color: var(--accent); margin: 0.5rem 0;">📍 {{.Location}}</p>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">{{.Description}}</p>
+        <a href="/event/{{.ID}}" class="btn btn-secondary">View Event</a>
+    </div>
+    {{else}}
+    <p class="text-muted" style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: rgba(0,0,0,0.2); border-radius: 1rem;">
+        You haven't RSVP'd to any events yet. <a href="/prospects" style="color: var(--primary-color);">Explore events here.</a>
+    </p>
+    {{end}}
+</div>
+{{end}}

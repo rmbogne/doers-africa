@@ -1,0 +1,47 @@
+package main
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/mbogne/african-doers/handlers"
+	"github.com/mbogne/african-doers/middleware"
+	"github.com/mbogne/african-doers/store"
+)
+
+func main() {
+	store.InitStore()
+
+	mux := http.NewServeMux()
+
+	// Static files
+	fs := http.FileServer(http.Dir("./static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// Public Routes
+	mux.HandleFunc("/", handlers.HomeHandler)
+	mux.HandleFunc("/prospects", handlers.ProspectsHandler)
+	mux.HandleFunc("/event/", handlers.EventDetailHandler)
+
+	// Auth Routes
+	mux.HandleFunc("/login", handlers.LoginHandler)
+	mux.HandleFunc("/register", handlers.RegisterHandler)
+	mux.HandleFunc("/logout", handlers.LogoutHandler)
+
+	// Doer Routes (requires "doer" role)
+	mux.HandleFunc("/doer/dashboard", middleware.RequireRole("doer", handlers.DoerDashboardHandler))
+	mux.HandleFunc("/doer/event/archive/", middleware.RequireRole("doer", handlers.DoerArchiveEventHandler))
+	mux.HandleFunc("/doer/service/archive/", middleware.RequireRole("doer", handlers.DoerArchiveServiceHandler))
+
+	// Customer Routes (requires "customer" role)
+	mux.HandleFunc("/customer/dashboard", middleware.RequireRole("customer", handlers.CustomerDashboardHandler))
+	mux.HandleFunc("/event/{id}/rsvp", middleware.RequireRole("customer", handlers.CustomerRSVPHandler))
+
+	// Wrap with observability and session auth middleware
+	handler := middleware.Logger(middleware.Auth(mux))
+
+	log.Println("Server starting on :8080...")
+	if err := http.ListenAndServe(":8080", handler); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
+}

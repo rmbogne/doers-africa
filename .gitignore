@@ -1,0 +1,17 @@
+# Binaries
+bin/
+server
+
+# Dependency directories
+vendor/
+
+# OS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo

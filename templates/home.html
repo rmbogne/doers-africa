@@ -1,0 +1,32 @@
+{{define "content"}}
+<section class="hero-section">
+    <div class="hero-text">
+        <h1>Connect with Top African Doers</h1>
+        <p>Discover premier event organizers and service providers across the continent.</p>
+        <a href="/prospects" class="btn btn-primary">Explore Now</a>
+    </div>
+</section>
+
+<section class="carousel-section">
+    <h2>Top Upcoming Events</h2>
+    <div class="carousel-container" id="events-carousel">
+        <div class="carousel-track">
+            {{range .Events}}
+            <div class="carousel-slide">
+                <div class="event-card">
+                    <div class="event-date">{{.Date}}</div>
+                    <div class="event-body">
+                        <h3>{{.Title}}</h3>
+                        <p class="event-location">📍 {{.Location}}</p>
+                        <p class="event-desc">{{.Description}}</p>
+                        <a href="/event/{{.ID}}" class="btn btn-secondary">View Details</a>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        <button class="carousel-btn prev-btn" onclick="moveCarousel(-1)">&#10094;</button>
+        <button class="carousel-btn next-btn" onclick="moveCarousel(1)">&#10095;</button>
+    </div>
+</section>
+{{end}}

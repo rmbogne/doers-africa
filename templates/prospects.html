@@ -1,0 +1,33 @@
+{{define "content"}}
+<section>
+    <h1 style="margin-bottom: 2rem; font-size: 3rem; text-align: center;">Explore African Doers</h1>
+    <p style="text-align: center; color: var(--text-muted); max-width: 600px; margin: 0 auto 3rem auto;">
+        Browse our network of talented service providers and discover upcoming local events across the continent.
+    </p>
+
+    <!-- Doers Section -->
+    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">Service Providers</h2>
+    <div class="grid-listing">
+        {{range .Doers}}
+        <div class="card">
+            <h3>{{.Name}}</h3>
+            <p class="text-muted">✉️ {{.Email}}</p>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Events Section -->
+    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">Upcoming Events</h2>
+    <div class="grid-listing">
+        {{range .Events}}
+        <div class="card">
+            <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
+            <h3>{{.Title}}</h3>
+            <p style="color: var(--accent); margin: 0.5rem 0;">📍 {{.Location}}</p>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">{{.Description}}</p>
+            <a href="/event/{{.ID}}" class="btn btn-secondary">Details</a>
+        </div>
+        {{end}}
+    </div>
+</section>
+{{end}}

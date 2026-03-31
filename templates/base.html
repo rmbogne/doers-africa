@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>African Doers</title>
+    <!-- Use Google Fonts (Outfit) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="logo">African Doers</a>
+            <ul class="nav-links">
+                <li><a href="/">Home</a></li>
+                <li><a href="/prospects">Explore</a></li>
+                {{if eq .Role "doer"}}
+                    <li><a href="/doer/dashboard">Doer Dashboard</a></li>
+                    <li><a href="/logout">Logout</a></li>
+                {{else if eq .Role "customer"}}
+                    <li><a href="/customer/dashboard">My RSVPs</a></li>
+                    <li><a href="/logout">Logout</a></li>
+                {{else}}
+                    <li><a href="/login">Login</a></li>
+                    <li><a href="/register">Register</a></li>
+                {{end}}
+            </ul>
+        </div>
+    </nav>
+
+    <main class="content-wrapper">
+        {{template "content" .}}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2026 African Doers. All rights reserved.</p>
+            <p class="disclaimer"><strong>Disclaimer:</strong> African Doers is a platform connecting event organizers and service providers. We act as a conduit and are not liable for the quality of services rendered nor any damages incurred from events. Users assume all responsibility when engaging providers found on this platform.</p>
+        </div>
+    </footer>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

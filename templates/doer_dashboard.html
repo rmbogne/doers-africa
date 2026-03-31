@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2>Doer Dashboard</h2>
+    <a href="/doer/event/new" class="btn btn-primary">+ Add Event</a>
+</div>
+
+<h3>My Events</h3>
+<div class="grid-listing" style="margin-bottom: 3rem;">
+    {{range .Events}}
+    <div class="card">
+        <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
+        <h4>{{.Title}}</h4>
+        <p class="text-muted">{{.Description}}</p>
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <!-- Simple Edit goes to a form, assuming we just have it as a placeholder for now -->
+            <button class="btn btn-secondary" onclick="alert('Edit event flow')" style="padding: 0.5rem 1rem;">Edit</button>
+            <form action="/doer/event/archive/{{.ID}}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3);">Archive</button>
+            </form>
+        </div>
+    </div>
+    {{else}}
+    <p class="text-muted">No events created yet.</p>
+    {{end}}
+</div>
+
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h3>My Services</h3>
+    <a href="/doer/service/new" class="btn btn-primary">+ Add Service</a>
+</div>
+<div class="grid-listing">
+    {{range .Services}}
+    <div class="card">
+        <h4>{{.Title}} <span style="font-weight: normal; color: var(--accent); float: right;">${{.Price}}</span></h4>
+        <p class="text-muted" style="margin-top: 0.5rem;">{{.Description}}</p>
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <form action="/doer/service/archive/{{.ID}}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3);">Archive</button>
+            </form>
+        </div>
+    </div>
+    {{else}}
+    <p class="text-muted">No services offered yet.</p>
+    {{end}}
+</div>
+{{end}}
