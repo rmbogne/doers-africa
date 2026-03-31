@@ -1,10 +1,12 @@
 package models
 
+import "go.mongodb.org/mongo-driver/bson/primitive"
+
 type Doer struct {
 	ID          int
 	Name        string
 	Email       string
-	Password    string // simplified, plaintext for demo
+	Password    string
 	Category    string
 	Description string
 	ZipCode     string
@@ -19,27 +21,27 @@ type Customer struct {
 	ID       int
 	Name     string
 	Email    string
-	Password string // simplified, plaintext for demo
+	Password string
 }
 
 type Event struct {
-	ID          int
-	Title       string
-	Description string
-	Date        string
-	Location    string
-	DoerID      int
+	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	Title       string             `bson:"title"`
+	Description string             `bson:"description"`
+	Date        string             `bson:"date"`
+	Location    string             `bson:"location"`
+	DoerID      int                `bson:"doer_id"`
 }
 
 type Service struct {
-	ID          int
-	Title       string
-	Description string
-	Price       int
-	DoerID      int
+	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	Title       string             `bson:"title"`
+	Description string             `bson:"description"`
+	Price       int                `bson:"price"`
+	DoerID      int                `bson:"doer_id"`
 }
 
 type RSVP struct {
-	EventID    int
+	EventID    string
 	CustomerID int
 }

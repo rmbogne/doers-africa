@@ -1,91 +1,233 @@
 package store
 
 import (
-	"sync"
+	"context"
+	"database/sql"
+	"log"
+
+	_ "github.com/lib/pq"
 	"github.com/mbogne/african-doers/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type Store struct {
-	Mu        sync.RWMutex
-	Doers     map[int]models.Doer
-	Customers map[int]models.Customer
-	Events    map[int]models.Event
-	Services  map[int]models.Service
-	RSVPs     []models.RSVP
-
-	nextDoerID     int
-	nextCustomerID int
-	nextEventID    int
-	nextServiceID  int
+type Database struct {
+	PG    *sql.DB
+	Mongo *mongo.Database
 }
 
-var DB *Store
+var DB *Database
 
 func InitStore() {
-	DB = &Store{
-		Doers:     make(map[int]models.Doer),
-		Customers: make(map[int]models.Customer),
-		Events:    make(map[int]models.Event),
-		Services:  make(map[int]models.Service),
-		RSVPs:     []models.RSVP{},
+	// Initialize Postgres
+	connStr := "host=localhost port=5433 user=user password=password dbname=africandoers sslmode=disable"
+	pg, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	seedDummyData()
+
+	// Initialize MongoDB
+	clientOptions := options.Client().ApplyURI("mongodb://root:password@localhost:27017")
+	mongoClient, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+
+	DB = &Database{
+		PG:    pg,
+		Mongo: mongoClient.Database("africandoers"),
+	}
+
+	setupPGSchema()
 }
 
-func seedDummyData() {
-	// Seed Doers
-	d1 := models.Doer{ID: 1, Name: "Kwame Event Co", Email: "kwame@events.com", Password: "password123"}
-	d2 := models.Doer{ID: 2, Name: "Nia Catering", Email: "nia@catering.com", Password: "password123"}
-	DB.Doers[1] = d1
-	DB.Doers[2] = d2
-	DB.nextDoerID = 3
+func setupPGSchema() {
+	query := `
+	CREATE TABLE IF NOT EXISTS doers (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(255),
+		email VARCHAR(255) UNIQUE,
+		password VARCHAR(255),
+		category VARCHAR(255),
+		description TEXT,
+		zipcode VARCHAR(50),
+		radius INT,
+		facebook VARCHAR(255),
+		tiktok VARCHAR(255),
+		instagram VARCHAR(255),
+		flyer_url VARCHAR(255)
+	);
 
-	// Seed Services
-	s1 := models.Service{ID: 1, Title: "Wedding Planning", Description: "Full service wedding planning", Price: 1500, DoerID: 1}
-	s2 := models.Service{ID: 2, Title: "Event Catering", Description: "Local dishes for 50-100 people", Price: 800, DoerID: 2}
-	s3 := models.Service{ID: 3, Title: "Corporate Events", Description: "Company retreats and conferences", Price: 2000, DoerID: 1}
-	DB.Services[1] = s1
-	DB.Services[2] = s2
-	DB.Services[3] = s3
-	DB.nextServiceID = 4
+	CREATE TABLE IF NOT EXISTS customers (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(255),
+		email VARCHAR(255) UNIQUE,
+		password VARCHAR(255)
+	);
 
-	// Seed Events (Need at least 5 for the Top 5 Carousel)
-	e1 := models.Event{ID: 1, Title: "Lagos Tech Meetup", Description: "Networking for tech enthusiasts", Date: "2026-04-10", Location: "Lagos", DoerID: 1}
-	e2 := models.Event{ID: 2, Title: "Nairobi Food Festival", Description: "Showcasing local cuisines", Date: "2026-04-15", Location: "Nairobi", DoerID: 2}
-	e3 := models.Event{ID: 3, Title: "Accra Startup Pitch", Description: "Pitch your startup to investors", Date: "2026-04-20", Location: "Accra", DoerID: 1}
-	e4 := models.Event{ID: 4, Title: "Kigali Art Expo", Description: "Exhibition of fine African arts", Date: "2026-05-05", Location: "Kigali", DoerID: 1}
-	e5 := models.Event{ID: 5, Title: "Cape Town Music Fest", Description: "Live bands and performances", Date: "2026-05-12", Location: "Cape Town", DoerID: 2}
-	e6 := models.Event{ID: 6, Title: "Dakar Marathon", Description: "Annual city marathon", Date: "2026-06-01", Location: "Dakar", DoerID: 1}
-	DB.Events[1] = e1
-	DB.Events[2] = e2
-	DB.Events[3] = e3
-	DB.Events[4] = e4
-	DB.Events[5] = e5
-	DB.Events[6] = e6
-	DB.nextEventID = 7
-
-	// Seed Customer
-	c1 := models.Customer{ID: 1, Name: "Alice Explorer", Email: "alice@test.com", Password: "password123"}
-	DB.Customers[1] = c1
-	DB.nextCustomerID = 2
-
-	// Seed one RSVP
-	DB.RSVPs = append(DB.RSVPs, models.RSVP{EventID: 1, CustomerID: 1})
+	CREATE TABLE IF NOT EXISTS rsvps (
+		event_id VARCHAR(255),
+		customer_id INT,
+		PRIMARY KEY (event_id, customer_id)
+	);`
+	_, err := DB.PG.Exec(query)
+	if err != nil {
+		log.Printf("Warning: Failed to setup PG tables: %v", err)
+	}
 }
 
-func (s *Store) RegisterDoer(doer models.Doer) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-	doer.ID = s.nextDoerID
-	s.nextDoerID++
-	s.Doers[doer.ID] = doer
+// ----------------- DOER QUERIES (PG) -----------------
+func (d *Database) RegisterDoer(doer models.Doer) {
+	_, err := d.PG.Exec(`INSERT INTO doers (name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, doer.Name, doer.Email, doer.Password, doer.Category, doer.Description, doer.ZipCode, doer.Radius, doer.Facebook, doer.TikTok, doer.Instagram, doer.FlyerURL)
+	if err != nil {
+		log.Printf("RegisterDoer error: %v", err)
+	}
 }
 
-func (s *Store) RegisterCustomer(name, email, password string) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-	id := s.nextCustomerID
-	s.nextCustomerID++
-	s.Customers[id] = models.Customer{ID: id, Name: name, Email: email, Password: password}
+func (d *Database) GetDoerAuth(email, password string) (models.Doer, bool) {
+	var doer models.Doer
+	err := d.PG.QueryRow(`SELECT id, name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE email=$1 AND password=$2`, email, password).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Password, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
+	if err != nil {
+		return doer, false
+	}
+	return doer, true
 }
 
+func (d *Database) GetDoer(id int) (models.Doer, bool) {
+	var doer models.Doer
+	err := d.PG.QueryRow(`SELECT id, name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE id=$1`, id).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Password, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
+	if err != nil {
+		return doer, false
+	}
+	return doer, true
+}
+
+func (d *Database) GetAllDoers() []models.Doer {
+	rows, err := d.PG.Query(`SELECT id, name, email, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers`)
+	if err != nil {
+		return []models.Doer{}
+	}
+	defer rows.Close()
+	var doers []models.Doer
+	for rows.Next() {
+		var doer models.Doer
+		rows.Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
+		doers = append(doers, doer)
+	}
+	return doers
+}
+
+// ----------------- CUSTOMER QUERIES (PG) -----------------
+func (d *Database) RegisterCustomer(name, email, password string) {
+	_, err := d.PG.Exec(`INSERT INTO customers (name, email, password) VALUES ($1, $2, $3)`, name, email, password)
+	if err != nil {
+		log.Printf("RegisterCustomer error: %v", err)
+	}
+}
+
+func (d *Database) GetCustomerAuth(email, password string) (models.Customer, bool) {
+	var cust models.Customer
+	err := d.PG.QueryRow(`SELECT id, name, email, password FROM customers WHERE email=$1 AND password=$2`, email, password).Scan(&cust.ID, &cust.Name, &cust.Email, &cust.Password)
+	if err != nil {
+		return cust, false
+	}
+	return cust, true
+}
+
+// ----------------- EVENT QUERIES (MONGO) -----------------
+func (d *Database) GetAllEvents() []models.Event {
+	collection := d.Mongo.Collection("events")
+	var events []models.Event
+	cursor, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return events
+	}
+	defer cursor.Close(context.TODO())
+	cursor.All(context.TODO(), &events)
+	return events
+}
+
+func (d *Database) GetEvent(id string) (models.Event, bool) {
+	var event models.Event
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return event, false
+	}
+	err = d.Mongo.Collection("events").FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&event)
+	if err != nil {
+		return event, false
+	}
+	return event, true
+}
+
+func (d *Database) GetEventsByDoer(doerID int) []models.Event {
+	collection := d.Mongo.Collection("events")
+	var events []models.Event
+	cursor, err := collection.Find(context.TODO(), bson.M{"doer_id": doerID})
+	if err != nil {
+		return events
+	}
+	defer cursor.Close(context.TODO())
+	cursor.All(context.TODO(), &events)
+	return events
+}
+
+func (d *Database) ArchiveEvent(id string) {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return
+	}
+	d.Mongo.Collection("events").DeleteOne(context.TODO(), bson.M{"_id": objID})
+}
+
+// ----------------- SERVICE QUERIES (MONGO) -----------------
+func (d *Database) GetServicesByDoer(doerID int) []models.Service {
+	collection := d.Mongo.Collection("services")
+	var services []models.Service
+	cursor, err := collection.Find(context.TODO(), bson.M{"doer_id": doerID})
+	if err != nil {
+		return services
+	}
+	defer cursor.Close(context.TODO())
+	cursor.All(context.TODO(), &services)
+	return services
+}
+
+func (d *Database) ArchiveService(id string) {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return
+	}
+	d.Mongo.Collection("services").DeleteOne(context.TODO(), bson.M{"_id": objID})
+}
+
+// ----------------- RSVP QUERIES (PG) -----------------
+func (d *Database) RecordRSVP(eventID string, customerID int) {
+	d.PG.Exec(`INSERT INTO rsvps (event_id, customer_id) VALUES ($1, $2)`, eventID, customerID)
+}
+
+func (d *Database) GetCustomerRSVPs(customerID int) []models.Event {
+	rows, err := d.PG.Query(`SELECT event_id FROM rsvps WHERE customer_id=$1`, customerID)
+	if err != nil {
+		return []models.Event{}
+	}
+	defer rows.Close()
+
+	var events []models.Event
+	for rows.Next() {
+		var eid string
+		rows.Scan(&eid)
+		if ev, ok := d.GetEvent(eid); ok {
+			events = append(events, ev)
+		}
+	}
+	return events
+}
+
+func (d *Database) HasRSVPd(eventID string, customerID int) bool {
+	var dummy string
+	err := d.PG.QueryRow(`SELECT event_id FROM rsvps WHERE event_id=$1 AND customer_id=$2`, eventID, customerID).Scan(&dummy)
+	return err == nil
+}

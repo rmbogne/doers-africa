@@ -2,27 +2,14 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
 
 func CustomerDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	cid := getID(r)
-	
-	store.DB.Mu.RLock()
-	defer store.DB.Mu.RUnlock()
-
-	var myEvents []models.Event
-	for _, rsvp := range store.DB.RSVPs {
-		if rsvp.CustomerID == cid {
-			if e, ok := store.DB.Events[rsvp.EventID]; ok {
-				myEvents = append(myEvents, e)
-			}
-		}
-	}
+	myEvents := store.DB.GetCustomerRSVPs(cid)
 
 	render(w, r, "customer_dashboard.html", PageData{
 		Events: myEvents,
@@ -40,20 +27,10 @@ func CustomerRSVPHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	eventID, err := strconv.Atoi(pathParts[2])
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
+	eventID := pathParts[2] // hex string
 
 	cid := getID(r)
-	
-	store.DB.Mu.Lock()
-	store.DB.RSVPs = append(store.DB.RSVPs, models.RSVP{
-		EventID:    eventID,
-		CustomerID: cid,
-	})
-	store.DB.Mu.Unlock()
+	store.DB.RecordRSVP(eventID, cid)
 
-	http.Redirect(w, r, "/event/"+strconv.Itoa(eventID), http.StatusSeeOther)
+	http.Redirect(w, r, "/event/"+eventID, http.StatusSeeOther)
 }

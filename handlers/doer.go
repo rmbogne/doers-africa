@@ -2,32 +2,16 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
 
 func DoerDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	doerID := getID(r)
 	
-	store.DB.Mu.RLock()
-	defer store.DB.Mu.RUnlock()
-
-	var myEvents []models.Event
-	for _, e := range store.DB.Events {
-		if e.DoerID == doerID {
-			myEvents = append(myEvents, e)
-		}
-	}
-	
-	var myServices []models.Service
-	for _, s := range store.DB.Services {
-		if s.DoerID == doerID {
-			myServices = append(myServices, s)
-		}
-	}
+	myEvents := store.DB.GetEventsByDoer(doerID)
+	myServices := store.DB.GetServicesByDoer(doerID)
 
 	render(w, r, "doer_dashboard.html", PageData{
 		Events:   myEvents,
@@ -45,12 +29,9 @@ func DoerArchiveEventHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	id, _ := strconv.Atoi(pathParts[4])
+	id := pathParts[4]
 	
-	store.DB.Mu.Lock()
-	delete(store.DB.Events, id)
-	store.DB.Mu.Unlock()
-
+	store.DB.ArchiveEvent(id)
 	http.Redirect(w, r, "/doer/dashboard", http.StatusSeeOther)
 }
 
@@ -64,11 +45,8 @@ func DoerArchiveServiceHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	id, _ := strconv.Atoi(pathParts[4])
+	id := pathParts[4]
 
-	store.DB.Mu.Lock()
-	delete(store.DB.Services, id)
-	store.DB.Mu.Unlock()
-
+	store.DB.ArchiveService(id)
 	http.Redirect(w, r, "/doer/dashboard", http.StatusSeeOther)
 }
