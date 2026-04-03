@@ -137,6 +137,16 @@ func (d *Database) GetCustomerAuth(email, password string) (models.Customer, boo
 }
 
 // ----------------- EVENT QUERIES (MONGO) -----------------
+func (d *Database) AddEvent(event models.Event) (string, error) {
+	collection := d.Mongo.Collection("events")
+	res, err := collection.InsertOne(context.TODO(), event)
+	if err != nil {
+		return "", err
+	}
+	id := res.InsertedID.(primitive.ObjectID).Hex()
+	return id, nil
+}
+
 func (d *Database) GetAllEvents() []models.Event {
 	collection := d.Mongo.Collection("events")
 	var events []models.Event
@@ -183,6 +193,16 @@ func (d *Database) ArchiveEvent(id string) {
 }
 
 // ----------------- SERVICE QUERIES (MONGO) -----------------
+func (d *Database) AddService(service models.Service) (string, error) {
+	collection := d.Mongo.Collection("services")
+	res, err := collection.InsertOne(context.TODO(), service)
+	if err != nil {
+		return "", err
+	}
+	id := res.InsertedID.(primitive.ObjectID).Hex()
+	return id, nil
+}
+
 func (d *Database) GetServicesByDoer(doerID int) []models.Service {
 	collection := d.Mongo.Collection("services")
 	var services []models.Service
