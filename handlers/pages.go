@@ -3,9 +3,7 @@ package handlers
 import (
 	"html/template"
 	"net/http"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
@@ -59,43 +57,20 @@ func render(w http.ResponseWriter, r *http.Request, tmpl string, data PageData) 
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
-	allEvents := store.DB.GetAllEvents()
-	var events []models.Event
+	events := store.DB.GetUpcomingEvents(10)
 	
-	today := time.Now().Format("2006-01-02")
-	for _, e := range allEvents {
-		// Only include events that are occurring today or in the future
-		if e.Date >= today {
-			events = append(events, e)
-		}
-	}
-
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].Date < events[j].Date
-	})
-
-	if len(events) > 5 {
-		events = events[:5]
+	// Ensure we only display up to 10
+	if len(events) > 10 {
+		events = events[:10]
 	}
 	render(w, r, "home.html", PageData{Events: events})
 }
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
 	services := store.DB.GetAllServices()
-	allEvents := store.DB.GetAllEvents()
 	
-	var upcomingEvents []models.Event
-	today := time.Now().Format("2006-01-02")
-	for _, e := range allEvents {
-		if e.Date >= today {
-			upcomingEvents = append(upcomingEvents, e)
-		}
-	}
-	
-	// Sort events sequentially by date
-	sort.Slice(upcomingEvents, func(i, j int) bool {
-		return upcomingEvents[i].Date < upcomingEvents[j].Date
-	})
+	// Explorer can show more events, for instance, up to 100 upcoming events
+	upcomingEvents := store.DB.GetUpcomingEvents(100)
 	
 	var serviceViews []ServiceView
 	for _, s := range services {

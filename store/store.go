@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/mbogne/african-doers/models"
@@ -169,6 +170,28 @@ func (d *Database) GetAllEvents() []models.Event {
 	collection := d.Mongo.Collection("events")
 	var events []models.Event
 	cursor, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return events
+	}
+	defer cursor.Close(context.TODO())
+	cursor.All(context.TODO(), &events)
+	return events
+}
+
+func (d *Database) GetUpcomingEvents(limit int64) []models.Event {
+	collection := d.Mongo.Collection("events")
+	var events []models.Event
+	
+	today := time.Now().Format("2006-01-02")
+	filter := bson.M{"date": bson.M{"$gte": today}}
+	
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "date", Value: 1}}) // Ascending order
+	if limit > 0 {
+		findOptions.SetLimit(limit)
+	}
+	
+	cursor, err := collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
 		return events
 	}
