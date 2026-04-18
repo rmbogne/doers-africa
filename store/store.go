@@ -178,7 +178,7 @@ func (d *Database) GetAllEvents() []models.Event {
 	return events
 }
 
-func (d *Database) GetUpcomingEvents(limit int64) []models.Event {
+func (d *Database) GetUpcomingEvents(skip int64, limit int64) []models.Event {
 	collection := d.Mongo.Collection("events")
 	var events []models.Event
 	
@@ -187,6 +187,9 @@ func (d *Database) GetUpcomingEvents(limit int64) []models.Event {
 	
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{Key: "date", Value: 1}}) // Ascending order
+	if skip > 0 {
+		findOptions.SetSkip(skip)
+	}
 	if limit > 0 {
 		findOptions.SetLimit(limit)
 	}
@@ -246,16 +249,39 @@ func (d *Database) AutoArchivePastEvents() {
 }
 
 // ----------------- SERVICE QUERIES (MONGO) -----------------
-func (d *Database) GetAllServices() []models.Service {
+func (d *Database) GetAllServices(skip int64, limit int64) []models.Service {
 	collection := d.Mongo.Collection("services")
 	var services []models.Service
-	cursor, err := collection.Find(context.TODO(), bson.M{})
+	
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "_id", Value: -1}}) // Newest first
+	if skip > 0 {
+		findOptions.SetSkip(skip)
+	}
+	if limit > 0 {
+		findOptions.SetLimit(limit)
+	}
+	
+	cursor, err := collection.Find(context.TODO(), bson.M{}, findOptions)
 	if err != nil {
 		return services
 	}
 	defer cursor.Close(context.TODO())
 	cursor.All(context.TODO(), &services)
 	return services
+}
+
+func (d *Database) GetService(id string) (models.Service, bool) {
+	var service models.Service
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return service, false
+	}
+	err = d.Mongo.Collection("services").FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&service)
+	if err != nil {
+		return service, false
+	}
+	return service, true
 }
 
 func (d *Database) AddService(service models.Service) (string, error) {

@@ -7,7 +7,7 @@
 
     <!-- Services Section -->
     <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">Available Services</h2>
-    <div class="grid-listing">
+    <div id="service-grid" class="grid-listing">
         {{range .ServiceViews}}
         <div class="card">
             {{if .Doer.FlyerURL}}
@@ -40,10 +40,11 @@
         </div>
         {{end}}
     </div>
+    <div id="service-loader" style="text-align: center; padding: 2rem; color: var(--text-muted);"><i>Scroll to load more services...</i></div>
 
     <!-- Events Section -->
     <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">Upcoming Events</h2>
-    <div class="grid-listing">
+    <div id="event-grid" class="grid-listing" data-role="{{$.Role}}">
         {{range .Events}}
         <div class="card">
             <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
@@ -61,5 +62,123 @@
         </div>
         {{end}}
     </div>
+    <div id="event-loader" style="text-align: center; padding: 2rem; color: var(--text-muted);"><i>Scroll to load more events...</i></div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- SERVICE INFINITE SCROLL ---
+    let serviceSkip = 6;
+    let loadingServices = false;
+    let noMoreServices = false;
+    const serviceGrid = document.getElementById('service-grid');
+    const serviceLoader = document.getElementById('service-loader');
+
+    const loadMoreServices = async () => {
+        if (loadingServices || noMoreServices) return;
+        loadingServices = true;
+
+        try {
+            const res = await fetch(`/api/services?skip=${serviceSkip}&limit=6`);
+            const data = await res.json();
+            if (data.length === 0) {
+                noMoreServices = true;
+                serviceLoader.innerHTML = "<i>No more services.</i>";
+                return;
+            }
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    ${item.Doer.FlyerURL ? `<img src="${item.Doer.FlyerURL}" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">` : ''}
+                    <h3>${item.Service.Title} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">$${item.Service.Price}</span></h3>
+                    <p style="margin: 0.5rem 0;">${item.Service.Description}</p>
+                    
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                        <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
+                        <h4 style="margin: 0.25rem 0;">${item.Doer.Name} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">(${item.Doer.Category})</span></h4>
+                        <p class="text-muted" style="margin-bottom: 0.25rem;">✉️ ${item.Doer.Email}</p>
+                        ${item.Doer.ZipCode ? `<p class="text-muted" style="font-size:0.8rem;">📍 Zip: ${item.Doer.ZipCode} (within ${item.Doer.Radius} miles)</p>` : ''}
+                    </div>
+                    
+                    <a href="/service/${item.Service.ID}" class="btn btn-secondary" style="margin-top: 1.5rem; display: block; text-align: center; background: rgba(255,255,255,0.05);">Details / Order</a>
+                `;
+                serviceGrid.appendChild(card);
+            });
+            serviceSkip += data.length;
+        } catch (e) {
+            console.error(e);
+            serviceLoader.innerText = "Failed to load more services.";
+        }
+        loadingServices = false;
+    };
+
+    const serviceObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) loadMoreServices();
+    }, { rootMargin: '100px' });
+    serviceObserver.observe(serviceLoader);
+
+
+    // --- EVENT INFINITE SCROLL ---
+    let eventSkip = 6;
+    let loadingEvents = false;
+    let noMoreEvents = false;
+    const eventGrid = document.getElementById('event-grid');
+    const eventLoader = document.getElementById('event-loader');
+    const userRole = eventGrid.getAttribute('data-role');
+
+    const loadMoreEvents = async () => {
+        if (loadingEvents || noMoreEvents) return;
+        loadingEvents = true;
+
+        try {
+            const res = await fetch(`/api/events?skip=${eventSkip}&limit=6`);
+            const data = await res.json();
+            if (data.length === 0) {
+                noMoreEvents = true;
+                eventLoader.innerHTML = "<i>No more events.</i>";
+                return;
+            }
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                let rsvpHtml = '';
+                if (userRole === "customer") {
+                    rsvpHtml = `
+                    <form action="/event/${item.ID}/rsvp" method="POST" style="flex: 1; display: flex;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
+                    </form>`;
+                }
+
+                card.innerHTML = `
+                    <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">${item.Date}</div>
+                    <h3>${item.Title}</h3>
+                    <p style="color: var(--accent); margin: 0.5rem 0;">📍 ${item.Location}</p>
+                    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">${item.Description}</p>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <a href="/event/${item.ID}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
+                        ${rsvpHtml}
+                    </div>
+                `;
+                eventGrid.appendChild(card);
+            });
+            eventSkip += data.length;
+        } catch (e) {
+            console.error(e);
+            eventLoader.innerText = "Failed to load more events.";
+        }
+        loadingEvents = false;
+    };
+
+    const eventObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) loadMoreEvents();
+    }, { rootMargin: '100px' });
+    if(eventLoader) {
+        eventObserver.observe(eventLoader);
+    }
+});
+</script>
 {{end}}

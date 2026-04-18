@@ -57,7 +57,7 @@ func render(w http.ResponseWriter, r *http.Request, tmpl string, data PageData) 
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
-	events := store.DB.GetUpcomingEvents(10)
+	events := store.DB.GetUpcomingEvents(0, 10)
 	
 	// Ensure we only display up to 10
 	if len(events) > 10 {
@@ -67,10 +67,9 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
-	services := store.DB.GetAllServices()
-	
-	// Explorer can show more events, for instance, up to 100 upcoming events
-	upcomingEvents := store.DB.GetUpcomingEvents(100)
+	// Let's statically generate just the first 6
+	services := store.DB.GetAllServices(0, 6)
+	upcomingEvents := store.DB.GetUpcomingEvents(0, 6)
 	
 	var serviceViews []ServiceView
 	for _, s := range services {
@@ -119,17 +118,7 @@ func ServiceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	id := pathParts[2]
 
-	var service models.Service
-	services := store.DB.GetAllServices()
-	found := false
-	for _, s := range services {
-		if s.ID.Hex() == id {
-			service = s
-			found = true
-			break
-		}
-	}
-
+	service, found := store.DB.GetService(id)
 	if !found {
 		http.NotFound(w, r)
 		return

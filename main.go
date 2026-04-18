@@ -36,6 +36,10 @@ func main() {
 	mux.HandleFunc("/event/", handlers.EventDetailHandler)
 	mux.HandleFunc("/service/", handlers.ServiceDetailHandler)
 
+	// API Routes (Infinite Scrolling)
+	mux.HandleFunc("/api/services", handlers.APIServicesHandler)
+	mux.HandleFunc("/api/events", handlers.APIEventsHandler)
+
 	// Auth Routes
 	mux.HandleFunc("/login", handlers.LoginHandler)
 	mux.HandleFunc("/register", handlers.RegisterHandler)
