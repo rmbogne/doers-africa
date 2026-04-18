@@ -67,9 +67,8 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
-	// Let's statically generate just the first 6
-	services := store.DB.GetAllServices(0, 6)
-	upcomingEvents := store.DB.GetUpcomingEvents(0, 6)
+	services := store.DB.GetAllServices(0, 5)
+	upcomingEvents := store.DB.GetUpcomingEvents(0, 5)
 	
 	var serviceViews []ServiceView
 	for _, s := range services {

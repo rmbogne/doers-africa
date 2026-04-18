@@ -302,6 +302,44 @@ body {
     margin-top: 2rem;
 }
 
+.horizontal-scroll-row {
+    display: flex;
+    overflow-x: auto;
+    gap: 1.5rem;
+    padding-bottom: 2rem;
+    margin-top: 2rem;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-scroll-row::-webkit-scrollbar {
+    height: 8px;
+}
+
+.horizontal-scroll-row::-webkit-scrollbar-track {
+    background: rgba(40, 40, 50, 0.5);
+    border-radius: 4px;
+}
+
+.horizontal-scroll-row::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+.horizontal-scroll-row .card {
+    flex: 0 0 calc(20% - 1.2rem);
+    min-width: 300px;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+}
+
+.action-row {
+    margin-top: auto;
+    width: 100%;
+}
+
 .card {
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.1);
