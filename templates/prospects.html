@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                serviceGrid.innerHTML = ''; // Replace rather than append
+
                 data.forEach(item => {
                     serviceGrid.appendChild(renderServiceCard(item));
                 });
@@ -178,6 +180,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                eventGrid.innerHTML = ''; // Replace rather than append
+
                 data.forEach(item => {
                     const card = document.createElement('div');
                     card.className = 'card';
@@ -204,9 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 eventSkip += data.length;
                 loadMoreEventsBtn.innerText = "Next";
-                
-                // Scroll container right
-                eventGrid.scrollBy({ left: 260, behavior: 'smooth' });
                 
                 if(data.length < 4) {
                     loadMoreEventsBtn.disabled = true;
