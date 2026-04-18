@@ -41,6 +41,43 @@ func DoerNewEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func DoerEditEventHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 5 {
+		http.NotFound(w, r)
+		return
+	}
+	id := pathParts[4]
+
+	// Fetch existing event
+	event, exists := store.DB.GetEvent(id)
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Verify ownership
+	doerID := getID(r)
+	if event.DoerID != doerID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		render(w, r, "edit_event.html", PageData{Event: event})
+	} else if r.Method == http.MethodPost {
+		r.ParseForm()
+
+		event.Title = r.FormValue("title")
+		event.Description = r.FormValue("description")
+		event.Date = r.FormValue("date")
+		event.Location = r.FormValue("location")
+
+		store.DB.UpdateEvent(id, event)
+		http.Redirect(w, r, "/doer/dashboard", http.StatusSeeOther)
+	}
+}
+
 func DoerNewServiceHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		render(w, r, "new_service.html", PageData{})

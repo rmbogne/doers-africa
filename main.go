@@ -31,6 +31,7 @@ func main() {
 	// Doer Routes (requires "doer" role)
 	mux.HandleFunc("/doer/dashboard", middleware.RequireRole("doer", handlers.DoerDashboardHandler))
 	mux.HandleFunc("/doer/event/new", middleware.RequireRole("doer", handlers.DoerNewEventHandler))
+	mux.HandleFunc("/doer/event/edit/", middleware.RequireRole("doer", handlers.DoerEditEventHandler))
 	mux.HandleFunc("/doer/service/new", middleware.RequireRole("doer", handlers.DoerNewServiceHandler))
 	mux.HandleFunc("/doer/event/archive/", middleware.RequireRole("doer", handlers.DoerArchiveEventHandler))
 	mux.HandleFunc("/doer/service/archive/", middleware.RequireRole("doer", handlers.DoerArchiveServiceHandler))

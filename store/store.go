@@ -147,6 +147,24 @@ func (d *Database) AddEvent(event models.Event) (string, error) {
 	return id, nil
 }
 
+func (d *Database) UpdateEvent(id string, event models.Event) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+	
+	update := bson.M{
+		"$set": bson.M{
+			"title":       event.Title,
+			"description": event.Description,
+			"date":        event.Date,
+			"location":    event.Location,
+		},
+	}
+	_, err = d.Mongo.Collection("events").UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	return err
+}
+
 func (d *Database) GetAllEvents() []models.Event {
 	collection := d.Mongo.Collection("events")
 	var events []models.Event
@@ -193,6 +211,18 @@ func (d *Database) ArchiveEvent(id string) {
 }
 
 // ----------------- SERVICE QUERIES (MONGO) -----------------
+func (d *Database) GetAllServices() []models.Service {
+	collection := d.Mongo.Collection("services")
+	var services []models.Service
+	cursor, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return services
+	}
+	defer cursor.Close(context.TODO())
+	cursor.All(context.TODO(), &services)
+	return services
+}
+
 func (d *Database) AddService(service models.Service) (string, error) {
 	collection := d.Mongo.Collection("services")
 	res, err := collection.InsertOne(context.TODO(), service)

@@ -11,14 +11,20 @@ import (
 	"github.com/mbogne/african-doers/store"
 )
 
+type ServiceView struct {
+	Service models.Service
+	Doer    models.Doer
+}
+
 type PageData struct {
-	Role     string
-	Events   []models.Event
-	Doers    []models.Doer
-	Services []models.Service
-	Event    models.Event
-	DoerName string
-	HasRSVPd bool
+	Role         string
+	Events       []models.Event
+	Doers        []models.Doer
+	Services     []models.Service
+	ServiceViews []ServiceView
+	Event        models.Event
+	DoerName     string
+	HasRSVPd     bool
 }
 
 func getRole(r *http.Request) string {
@@ -62,9 +68,18 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
-	doers := store.DB.GetAllDoers()
+	services := store.DB.GetAllServices()
 	events := store.DB.GetAllEvents()
-	render(w, r, "prospects.html", PageData{Doers: doers, Events: events})
+	
+	var serviceViews []ServiceView
+	for _, s := range services {
+		doer, ok := store.DB.GetDoer(s.DoerID)
+		if ok {
+			serviceViews = append(serviceViews, ServiceView{Service: s, Doer: doer})
+		}
+	}
+	
+	render(w, r, "prospects.html", PageData{ServiceViews: serviceViews, Events: events})
 }
 
 func EventDetailHandler(w http.ResponseWriter, r *http.Request) {

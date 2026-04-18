@@ -5,32 +5,35 @@
         Browse our network of talented service providers and discover upcoming local events across the continent.
     </p>
 
-    <!-- Doers Section -->
-    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">Service Providers</h2>
+    <!-- Services Section -->
+    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">Available Services</h2>
     <div class="grid-listing">
-        {{range .Doers}}
+        {{range .ServiceViews}}
         <div class="card">
-            {{if .FlyerURL}}
-            <img src="{{.FlyerURL}}" alt="{{.Name}} Flyer" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
+            {{if .Doer.FlyerURL}}
+            <img src="{{.Doer.FlyerURL}}" alt="{{.Doer.Name}} Flyer" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
             {{end}}
-            <h3>{{.Name}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">{{.Category}}</span></h3>
-            <p class="text-muted" style="margin: 0.5rem 0;">✉️ {{.Email}}</p>
-            {{if .Description}}
-            <p style="margin-bottom: 0.5rem;">{{.Description}}</p>
-            {{end}}
-            {{if .ZipCode}}
-            <p class="text-muted" style="font-size:0.9rem;">📍 Zip: {{.ZipCode}} (within {{.Radius}} miles)</p>
-            {{end}}
-            <div style="margin-top: 1rem; display:flex; gap:0.5rem;">
-                {{if .Facebook}}
-                <a href="{{.Facebook}}" target="_blank" style="color:var(--text-main); text-decoration:none;">📱 FB</a>
+            <h3>{{.Service.Title}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">${{.Service.Price}}</span></h3>
+            <p style="margin: 0.5rem 0;">{{.Service.Description}}</p>
+            
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
+                <h4 style="margin: 0.25rem 0;">{{.Doer.Name}} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">({{.Doer.Category}})</span></h4>
+                <p class="text-muted" style="margin-bottom: 0.25rem;">✉️ {{.Doer.Email}}</p>
+                {{if .Doer.ZipCode}}
+                <p class="text-muted" style="font-size:0.8rem;">📍 Zip: {{.Doer.ZipCode}} (within {{.Doer.Radius}} miles)</p>
                 {{end}}
-                {{if .Instagram}}
-                <a href="{{.Instagram}}" target="_blank" style="color:var(--text-main); text-decoration:none;">📸 Insta</a>
-                {{end}}
-                {{if .TikTok}}
-                <a href="{{.TikTok}}" target="_blank" style="color:var(--text-main); text-decoration:none;">🎵 TikTok</a>
-                {{end}}
+                <div style="margin-top: 0.5rem; display:flex; gap:0.5rem;">
+                    {{if .Doer.Facebook}}
+                    <a href="{{.Doer.Facebook}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">📱 FB</a>
+                    {{end}}
+                    {{if .Doer.Instagram}}
+                    <a href="{{.Doer.Instagram}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">📸 Insta</a>
+                    {{end}}
+                    {{if .Doer.TikTok}}
+                    <a href="{{.Doer.TikTok}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">🎵 TikTok</a>
+                    {{end}}
+                </div>
             </div>
         </div>
         {{end}}

@@ -12,8 +12,7 @@
         <h4>{{.Title}}</h4>
         <p class="text-muted">{{.Description}}</p>
         <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-            <!-- Simple Edit goes to a form, assuming we just have it as a placeholder for now -->
-            <button class="btn btn-secondary" onclick="alert('Edit event flow')" style="padding: 0.5rem 1rem;">Edit</button>
+            <a href="/doer/event/edit/{{.ID.Hex}}" class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">Edit</a>
             <form action="/doer/event/archive/{{.ID}}" method="POST" style="display: inline;">
                 <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3);">Archive</button>
             </form>
