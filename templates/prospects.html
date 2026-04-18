@@ -6,14 +6,13 @@
     </p>
 
     <!-- Services Section -->
-    <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-            <h2 style="margin: 0;">Available Services</h2>
-            <button id="load-more-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
-        </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h2 style="margin: 0; white-space: nowrap;">Available Services</h2>
         
-        <div class="search-bar-container">
-            <input type="text" id="search-services" class="search-bar" placeholder="Search for a service by title..." />
+        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; flex: 1; margin-left: 2rem;">
+            <input type="text" id="search-services" class="search-bar" placeholder="Search by title..." style="max-width: 300px; margin: 0; padding: 0.5rem 1rem;" />
+            <button id="prev-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;" disabled>Previous</button>
+            <button id="load-more-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
         </div>
     </div>
     
@@ -39,9 +38,12 @@
     </div>
 
     <!-- Events Section -->
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">
         <h2 style="margin: 0;">Upcoming Events</h2>
-        <button id="load-more-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button id="prev-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;" disabled>Previous</button>
+            <button id="load-more-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
+        </div>
     </div>
 
     <div id="event-grid" class="horizontal-scroll-row horizontal-4x" data-role="{{$.Role}}">
@@ -66,10 +68,14 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    let serviceSkip = 6;
+    // --- SERVICE PAGINATION & SEARCH ---
+    let currentServiceSkip = 0;
+    const serviceLimit = 6;
     let currentSearch = "";
+    
     const serviceGrid = document.getElementById('service-grid');
     const loadMoreServicesBtn = document.getElementById('load-more-services');
+    const prevServicesBtn = document.getElementById('prev-services');
     const searchInput = document.getElementById('search-services');
 
     const renderServiceCard = (item) => {
@@ -92,131 +98,129 @@ document.addEventListener('DOMContentLoaded', () => {
         return card;
     };
 
-    // Handle Search Bar Input
+    const fetchServices = async (skip, query) => {
+        serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%;">Loading...</div>';
+        try {
+            const res = await fetch(`/api/services?skip=${skip}&limit=${serviceLimit}&q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            serviceGrid.innerHTML = '';
+            if (!data || data.length === 0) {
+                serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:var(--text-muted);">No services found.</div>';
+                loadMoreServicesBtn.disabled = true;
+                return data ? data.length : 0;
+            }
+
+            data.forEach(item => {
+                serviceGrid.appendChild(renderServiceCard(item));
+            });
+            
+            // Buttons logic
+            prevServicesBtn.disabled = skip === 0;
+            loadMoreServicesBtn.disabled = data.length < serviceLimit;
+
+            return data.length;
+        } catch (err) {
+            console.error(err);
+            serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:red;">Error loading services.</div>';
+            return 0;
+        }
+    };
+
+    // Debounced Search Input
     let debounceTimer;
     if(searchInput) {
         searchInput.addEventListener('input', (e) => {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
+            debounceTimer = setTimeout(() => {
                 currentSearch = e.target.value.trim();
-                serviceSkip = 0; // reset pagination
-                serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%;">Searching...</div>';
-                loadMoreServicesBtn.disabled = false;
-                loadMoreServicesBtn.innerText = "Next";
-
-                try {
-                    const res = await fetch(`/api/services?skip=0&limit=6&q=${encodeURIComponent(currentSearch)}`);
-                    const data = await res.json();
-                    
-                    serviceGrid.innerHTML = ''; // clear grid entirely
-                    if (!data || data.length === 0) {
-                        serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:var(--text-muted);">No services found matching your search.</div>';
-                        loadMoreServicesBtn.disabled = true;
-                        return;
-                    }
-
-                    data.forEach(item => {
-                        serviceGrid.appendChild(renderServiceCard(item));
-                    });
-                    serviceSkip = data.length;
-                    
-                    if(data.length < 6) loadMoreServicesBtn.disabled = true;
-
-                } catch (err) {
-                    console.error(err);
-                    serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:red;">Error searching services.</div>';
-                }
-            }, 300); // 300ms debounce
+                currentServiceSkip = 0; // Reset pagination on new search
+                fetchServices(currentServiceSkip, currentSearch);
+            }, 300);
         });
     }
 
-    // Handle "Next" Button for Services
     if(loadMoreServicesBtn) {
-        loadMoreServicesBtn.addEventListener('click', async () => {
-            loadMoreServicesBtn.innerText = "Loading...";
-            try {
-                const res = await fetch(`/api/services?skip=${serviceSkip}&limit=6&q=${encodeURIComponent(currentSearch)}`);
-                const data = await res.json();
-                if (!data || data.length === 0) {
-                    loadMoreServicesBtn.innerText = "No more";
-                    loadMoreServicesBtn.disabled = true;
-                    return;
-                }
-
-                serviceGrid.innerHTML = ''; // Replace rather than append
-
-                data.forEach(item => {
-                    serviceGrid.appendChild(renderServiceCard(item));
-                });
-                serviceSkip += data.length;
-                loadMoreServicesBtn.innerText = "Next";
-
-                if(data.length < 6) {
-                    loadMoreServicesBtn.disabled = true;
-                    loadMoreServicesBtn.innerText = "No more";
-                }
-            } catch (e) {
-                console.error(e);
-                loadMoreServicesBtn.innerText = "Error Loading";
-            }
+        loadMoreServicesBtn.addEventListener('click', () => {
+            currentServiceSkip += serviceLimit;
+            fetchServices(currentServiceSkip, currentSearch);
         });
     }
 
-    // Handle "Next" Button for Events
-    let eventSkip = 4;
+    if(prevServicesBtn) {
+        prevServicesBtn.addEventListener('click', () => {
+            currentServiceSkip = Math.max(0, currentServiceSkip - serviceLimit);
+            fetchServices(currentServiceSkip, currentSearch);
+        });
+    }
+
+    // --- EVENT PAGINATION ---
+    let currentEventSkip = 0;
+    const eventLimit = 4;
     const eventGrid = document.getElementById('event-grid');
     const loadMoreEventsBtn = document.getElementById('load-more-events');
+    const prevEventsBtn = document.getElementById('prev-events');
     const userRole = eventGrid.getAttribute('data-role');
 
-    if(loadMoreEventsBtn) {
-        loadMoreEventsBtn.addEventListener('click', async () => {
-            loadMoreEventsBtn.innerText = "Loading...";
-            try {
-                const res = await fetch(`/api/events?skip=${eventSkip}&limit=4`);
-                const data = await res.json();
-                if (!data || data.length === 0) {
-                    loadMoreEventsBtn.innerText = "No more";
-                    loadMoreEventsBtn.disabled = true;
-                    return;
-                }
-
-                eventGrid.innerHTML = ''; // Replace rather than append
-
-                data.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    
-                    let rsvpHtml = '';
-                    if (userRole === "customer") {
-                        rsvpHtml = `
-                        <form action="/event/${item.ID}/rsvp" method="POST" style="flex: 1; display: flex;">
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
-                        </form>`;
-                    }
-
-                    card.innerHTML = `
-                        <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">${item.Date}</div>
-                        <h3 style="font-size:1.25rem;">${item.Title}</h3>
-                        <p style="color: var(--accent); margin: 0.5rem 0; font-size:0.9rem;">📍 ${item.Location}</p>
-                        <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size:0.95rem;">${item.Description}</p>
-                        <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-                            <a href="/event/${item.ID}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
-                            ${rsvpHtml}
-                        </div>
-                    `;
-                    eventGrid.appendChild(card);
-                });
-                eventSkip += data.length;
-                loadMoreEventsBtn.innerText = "Next";
-                
-                if(data.length < 4) {
-                    loadMoreEventsBtn.disabled = true;
-                    loadMoreEventsBtn.innerText = "No more";
-                }
-            } catch (e) {
-                console.error(e);
-                loadMoreEventsBtn.innerText = "Error Loading";
+    const fetchEvents = async (skip) => {
+        eventGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%;">Loading...</div>';
+        try {
+            const res = await fetch(`/api/events?skip=${skip}&limit=${eventLimit}`);
+            const data = await res.json();
+            
+            eventGrid.innerHTML = ''; // Replace
+            if (!data || data.length === 0) {
+                eventGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:var(--text-muted);">No upcoming events.</div>';
+                loadMoreEventsBtn.disabled = true;
+                return;
             }
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                let rsvpHtml = '';
+                if (userRole === "customer") {
+                    rsvpHtml = `
+                    <form action="/event/${item.ID}/rsvp" method="POST" style="flex: 1; display: flex;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
+                    </form>`;
+                }
+
+                card.innerHTML = `
+                    <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">${item.Date}</div>
+                    <h3 style="font-size:1.25rem;">${item.Title}</h3>
+                    <p style="color: var(--accent); margin: 0.5rem 0; font-size:0.9rem;">📍 ${item.Location}</p>
+                    <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size:0.95rem;">${item.Description}</p>
+                    <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                        <a href="/event/${item.ID}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
+                        ${rsvpHtml}
+                    </div>
+                `;
+                eventGrid.appendChild(card);
+            });
+
+            // Buttons logic
+            prevEventsBtn.disabled = skip === 0;
+            loadMoreEventsBtn.disabled = data.length < eventLimit;
+
+        } catch (e) {
+            console.error(e);
+            eventGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:red;">Error loading events.</div>';
+        }
+    };
+
+    if(loadMoreEventsBtn) {
+        loadMoreEventsBtn.addEventListener('click', () => {
+            currentEventSkip += eventLimit;
+            fetchEvents(currentEventSkip);
+        });
+    }
+
+    if(prevEventsBtn) {
+        prevEventsBtn.addEventListener('click', () => {
+            currentEventSkip = Math.max(0, currentEventSkip - eventLimit);
+            fetchEvents(currentEventSkip);
         });
     }
 });
