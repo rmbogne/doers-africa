@@ -8,6 +8,7 @@
     <!-- Services Section -->
     <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
         <h2 style="margin: 0;">Available Services</h2>
+        <button id="load-more-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Load Next 5 Services</button>
     </div>
     
     <div id="service-grid" class="horizontal-scroll-row">
@@ -49,9 +50,10 @@
     <!-- Events Section -->
     <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">
         <h2 style="margin: 0;">Upcoming Events</h2>
+        <button id="load-more-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Load Next 5 Events</button>
     </div>
 
-    <div id="event-grid" class="horizontal-scroll-row">
+    <div id="event-grid" class="horizontal-scroll-row" data-role="{{$.Role}}">
         {{range .Events}}
         <div class="card">
             <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
@@ -70,4 +72,110 @@
         {{end}}
     </div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    let serviceSkip = 5;
+    const serviceGrid = document.getElementById('service-grid');
+    const loadMoreServicesBtn = document.getElementById('load-more-services');
+
+    if(loadMoreServicesBtn) {
+        loadMoreServicesBtn.addEventListener('click', async () => {
+            loadMoreServicesBtn.innerText = "Loading...";
+            try {
+                const res = await fetch(`/api/services?skip=${serviceSkip}&limit=5`);
+                const data = await res.json();
+                if (!data || data.length === 0) {
+                    loadMoreServicesBtn.innerText = "No more services found";
+                    loadMoreServicesBtn.disabled = true;
+                    return;
+                }
+
+                data.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        ${item.Doer.FlyerURL ? `<img src="${item.Doer.FlyerURL}" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">` : ''}
+                        <h3>${item.Service.Title} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">$${item.Service.Price}</span></h3>
+                        <p style="margin: 0.5rem 0;">${item.Service.Description}</p>
+                        
+                        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                            <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
+                            <h4 style="margin: 0.25rem 0;">${item.Doer.Name} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">(${item.Doer.Category})</span></h4>
+                            <p class="text-muted" style="margin-bottom: 0.25rem;">✉️ ${item.Doer.Email}</p>
+                            ${item.Doer.ZipCode ? `<p class="text-muted" style="font-size:0.8rem;">📍 Zip: ${item.Doer.ZipCode} (within ${item.Doer.Radius} miles)</p>` : ''}
+                        </div>
+                        
+                        <div class="action-row" style="margin-top: 1.5rem;">
+                            <a href="/service/${item.Service.ID}" class="btn btn-secondary" style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;">Details / Order</a>
+                        </div>
+                    `;
+                    serviceGrid.appendChild(card);
+                });
+                serviceSkip += data.length;
+                loadMoreServicesBtn.innerText = "Load Next 5 Services";
+                
+                // Scroll container right
+                serviceGrid.scrollBy({ left: 320, behavior: 'smooth' });
+            } catch (e) {
+                console.error(e);
+                loadMoreServicesBtn.innerText = "Error Loading";
+            }
+        });
+    }
+
+    let eventSkip = 5;
+    const eventGrid = document.getElementById('event-grid');
+    const loadMoreEventsBtn = document.getElementById('load-more-events');
+    const userRole = eventGrid.getAttribute('data-role');
+
+    if(loadMoreEventsBtn) {
+        loadMoreEventsBtn.addEventListener('click', async () => {
+            loadMoreEventsBtn.innerText = "Loading...";
+            try {
+                const res = await fetch(`/api/events?skip=${eventSkip}&limit=5`);
+                const data = await res.json();
+                if (!data || data.length === 0) {
+                    loadMoreEventsBtn.innerText = "No more events found";
+                    loadMoreEventsBtn.disabled = true;
+                    return;
+                }
+
+                data.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    
+                    let rsvpHtml = '';
+                    if (userRole === "customer") {
+                        rsvpHtml = `
+                        <form action="/event/${item.ID}/rsvp" method="POST" style="flex: 1; display: flex;">
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
+                        </form>`;
+                    }
+
+                    card.innerHTML = `
+                        <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">${item.Date}</div>
+                        <h3>${item.Title}</h3>
+                        <p style="color: var(--accent); margin: 0.5rem 0;">📍 ${item.Location}</p>
+                        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">${item.Description}</p>
+                        <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                            <a href="/event/${item.ID}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
+                            ${rsvpHtml}
+                        </div>
+                    `;
+                    eventGrid.appendChild(card);
+                });
+                eventSkip += data.length;
+                loadMoreEventsBtn.innerText = "Load Next 5 Events";
+                
+                // Scroll container right
+                eventGrid.scrollBy({ left: 320, behavior: 'smooth' });
+            } catch (e) {
+                console.error(e);
+                loadMoreEventsBtn.innerText = "Error Loading";
+            }
+        });
+    }
+});
+</script>
 {{end}}
