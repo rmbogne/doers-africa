@@ -1,0 +1,37 @@
+{{define "content"}}
+<div style="max-width: 800px; margin: 0 auto; background: var(--bg-card); padding: 3rem; border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+        <div>
+            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">{{.Service.Title}}</h1>
+            <p style="color: var(--accent); font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">${{.Service.Price}}</p>
+            <p class="text-muted" style="margin-top: 0.5rem;">Provided by <strong>{{.DoerName}}</strong></p>
+        </div>
+        
+        {{if eq .Role "customer"}}
+            <button onclick="alert('Order placed successfully! The provider will contact you shortly.')" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem; background: var(--accent); border-color: var(--accent); color: #000;">
+                Place an Order
+            </button>
+        {{else if eq .Role "doer"}}
+            <div style="background: rgba(255, 255, 255, 0.1); padding: 1rem 2rem; border-radius: 9999px; font-weight: bold;">
+                Doers Cannot Order
+            </div>
+        {{else}}
+            <a href="/login?role=customer" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">Login to Order</a>
+        {{end}}
+    </div>
+
+    <h3 style="margin-top: 3rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">Service Details</h3>
+    <p style="margin-top: 1rem; line-height: 1.8; color: var(--text-main);">{{.Service.Description}}</p>
+    
+    <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+        <h4 style="margin-bottom: 1rem;">Provider Information</h4>
+        <p><strong>Email:</strong> {{.Doer.Email}}</p>
+        {{if .Doer.ZipCode}}
+        <p><strong>Location:</strong> Zip {{.Doer.ZipCode}} (Radius: {{.Doer.Radius}} miles)</p>
+        {{end}}
+        {{if .Doer.Category}}
+        <p><strong>Category:</strong> {{.Doer.Category}}</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

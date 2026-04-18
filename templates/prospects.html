@@ -35,6 +35,8 @@
                     {{end}}
                 </div>
             </div>
+            
+            <a href="/service/{{.Service.ID.Hex}}" class="btn btn-secondary" style="margin-top: 1.5rem; display: block; text-align: center; background: rgba(255,255,255,0.05);">Details / Order</a>
         </div>
         {{end}}
     </div>
@@ -48,7 +50,14 @@
             <h3>{{.Title}}</h3>
             <p style="color: var(--accent); margin: 0.5rem 0;">📍 {{.Location}}</p>
             <p style="color: var(--text-muted); margin-bottom: 1.5rem;">{{.Description}}</p>
-            <a href="/event/{{.ID}}" class="btn btn-secondary">Details</a>
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/event/{{.ID.Hex}}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
+                {{if eq $.Role "customer"}}
+                    <form action="/event/{{.ID.Hex}}/rsvp" method="POST" style="flex: 1; display: flex;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
+                    </form>
+                {{end}}
+            </div>
         </div>
         {{end}}
     </div>

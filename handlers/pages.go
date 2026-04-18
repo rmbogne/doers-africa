@@ -23,6 +23,8 @@ type PageData struct {
 	Services     []models.Service
 	ServiceViews []ServiceView
 	Event        models.Event
+	Service      models.Service
+	Doer         models.Doer
 	DoerName     string
 	HasRSVPd     bool
 }
@@ -107,5 +109,38 @@ func EventDetailHandler(w http.ResponseWriter, r *http.Request) {
 		Event:    event,
 		DoerName: doer.Name,
 		HasRSVPd: hasRSVPd,
+	})
+}
+
+func ServiceDetailHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 3 {
+		http.NotFound(w, r)
+		return
+	}
+	id := pathParts[2]
+
+	var service models.Service
+	services := store.DB.GetAllServices()
+	found := false
+	for _, s := range services {
+		if s.ID.Hex() == id {
+			service = s
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+
+	doer, _ := store.DB.GetDoer(service.DoerID)
+
+	render(w, r, "service_detail.html", PageData{
+		Service:  service,
+		Doer:     doer,
+		DoerName: doer.Name,
 	})
 }

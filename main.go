@@ -22,6 +22,7 @@ func main() {
 	mux.HandleFunc("/", handlers.HomeHandler)
 	mux.HandleFunc("/prospects", handlers.ProspectsHandler)
 	mux.HandleFunc("/event/", handlers.EventDetailHandler)
+	mux.HandleFunc("/service/", handlers.ServiceDetailHandler)
 
 	// Auth Routes
 	mux.HandleFunc("/login", handlers.LoginHandler)
