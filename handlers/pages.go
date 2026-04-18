@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
@@ -58,7 +59,17 @@ func render(w http.ResponseWriter, r *http.Request, tmpl string, data PageData) 
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
-	events := store.DB.GetAllEvents()
+	allEvents := store.DB.GetAllEvents()
+	var events []models.Event
+	
+	today := time.Now().Format("2006-01-02")
+	for _, e := range allEvents {
+		// Only include events that are occurring today or in the future
+		if e.Date >= today {
+			events = append(events, e)
+		}
+	}
+
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].Date < events[j].Date
 	})
@@ -71,7 +82,20 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
 	services := store.DB.GetAllServices()
-	events := store.DB.GetAllEvents()
+	allEvents := store.DB.GetAllEvents()
+	
+	var upcomingEvents []models.Event
+	today := time.Now().Format("2006-01-02")
+	for _, e := range allEvents {
+		if e.Date >= today {
+			upcomingEvents = append(upcomingEvents, e)
+		}
+	}
+	
+	// Sort events sequentially by date
+	sort.Slice(upcomingEvents, func(i, j int) bool {
+		return upcomingEvents[i].Date < upcomingEvents[j].Date
+	})
 	
 	var serviceViews []ServiceView
 	for _, s := range services {
@@ -81,7 +105,7 @@ func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	
-	render(w, r, "prospects.html", PageData{ServiceViews: serviceViews, Events: events})
+	render(w, r, "prospects.html", PageData{ServiceViews: serviceViews, Events: upcomingEvents})
 }
 
 func EventDetailHandler(w http.ResponseWriter, r *http.Request) {
