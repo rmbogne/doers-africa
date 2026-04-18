@@ -28,8 +28,9 @@ func getSkipLimit(r *http.Request) (int64, int64) {
 
 func APIServicesHandler(w http.ResponseWriter, r *http.Request) {
 	skip, limit := getSkipLimit(r)
+	search := r.URL.Query().Get("q")
 	
-	services := store.DB.GetAllServices(skip, limit)
+	services := store.DB.GetAllServices(skip, limit, search)
 	
 	// Format as views
 	views := []ServiceView{}

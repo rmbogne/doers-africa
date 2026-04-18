@@ -6,41 +6,32 @@
     </p>
 
     <!-- Services Section -->
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-        <h2 style="margin: 0;">Available Services</h2>
-        <button id="load-more-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Load Next 5 Services</button>
+    <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <h2 style="margin: 0;">Available Services</h2>
+            <button id="load-more-services" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
+        </div>
+        
+        <div class="search-bar-container">
+            <input type="text" id="search-services" class="search-bar" placeholder="Search for a service by title..." />
+        </div>
     </div>
     
-    <div id="service-grid" class="horizontal-scroll-row">
+    <div id="service-grid" class="grid-3x">
         {{range .ServiceViews}}
         <div class="card">
             {{if .Doer.FlyerURL}}
-            <img src="{{.Doer.FlyerURL}}" alt="{{.Doer.Name}} Flyer" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
+            <img src="{{.Doer.FlyerURL}}" alt="{{.Doer.Name}} Flyer" style="width:100%; height:150px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
             {{end}}
-            <h3>{{.Service.Title}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">${{.Service.Price}}</span></h3>
-            <p style="margin: 0.5rem 0;">{{.Service.Description}}</p>
+            <h3 style="font-size: 1.25rem;">{{.Service.Title}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">${{.Service.Price}}</span></h3>
+            <p style="margin: 0.5rem 0; font-size: 0.95rem;">{{.Service.Description}}</p>
             
-            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <div style="margin-top: auto; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
                 <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
-                <h4 style="margin: 0.25rem 0;">{{.Doer.Name}} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">({{.Doer.Category}})</span></h4>
-                <p class="text-muted" style="margin-bottom: 0.25rem;">✉️ {{.Doer.Email}}</p>
-                {{if .Doer.ZipCode}}
-                <p class="text-muted" style="font-size:0.8rem;">📍 Zip: {{.Doer.ZipCode}} (within {{.Doer.Radius}} miles)</p>
-                {{end}}
-                <div style="margin-top: 0.5rem; display:flex; gap:0.5rem;">
-                    {{if .Doer.Facebook}}
-                    <a href="{{.Doer.Facebook}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">📱 FB</a>
-                    {{end}}
-                    {{if .Doer.Instagram}}
-                    <a href="{{.Doer.Instagram}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">📸 Insta</a>
-                    {{end}}
-                    {{if .Doer.TikTok}}
-                    <a href="{{.Doer.TikTok}}" target="_blank" style="font-size:0.9rem; color:var(--text-main); text-decoration:none;">🎵 TikTok</a>
-                    {{end}}
-                </div>
+                <h4 style="margin: 0.25rem 0; font-size: 1rem;">{{.Doer.Name}} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">({{.Doer.Category}})</span></h4>
             </div>
             
-            <div class="action-row" style="margin-top: 1.5rem;">
+            <div class="action-row" style="margin-top: 1rem;">
                 <a href="/service/{{.Service.ID.Hex}}" class="btn btn-secondary" style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;">Details / Order</a>
             </div>
         </div>
@@ -50,16 +41,16 @@
     <!-- Events Section -->
     <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">
         <h2 style="margin: 0;">Upcoming Events</h2>
-        <button id="load-more-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Load Next 5 Events</button>
+        <button id="load-more-events" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Next</button>
     </div>
 
-    <div id="event-grid" class="horizontal-scroll-row" data-role="{{$.Role}}">
+    <div id="event-grid" class="horizontal-scroll-row horizontal-4x" data-role="{{$.Role}}">
         {{range .Events}}
         <div class="card">
             <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
-            <h3>{{.Title}}</h3>
-            <p style="color: var(--accent); margin: 0.5rem 0;">📍 {{.Location}}</p>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">{{.Description}}</p>
+            <h3 style="font-size: 1.25rem;">{{.Title}}</h3>
+            <p style="color: var(--accent); margin: 0.5rem 0; font-size:0.9rem;">📍 {{.Location}}</p>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size:0.95rem;">{{.Description}}</p>
             <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
                 <a href="/event/{{.ID.Hex}}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
                 {{if eq $.Role "customer"}}
@@ -75,48 +66,93 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    let serviceSkip = 5;
+    let serviceSkip = 6;
+    let currentSearch = "";
     const serviceGrid = document.getElementById('service-grid');
     const loadMoreServicesBtn = document.getElementById('load-more-services');
+    const searchInput = document.getElementById('search-services');
 
+    const renderServiceCard = (item) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+            ${item.Doer.FlyerURL ? `<img src="${item.Doer.FlyerURL}" style="width:100%; height:150px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">` : ''}
+            <h3 style="font-size:1.25rem;">${item.Service.Title} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">$${item.Service.Price}</span></h3>
+            <p style="margin: 0.5rem 0; font-size:0.95rem;">${item.Service.Description}</p>
+            
+            <div style="margin-top: auto; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
+                <h4 style="margin: 0.25rem 0; font-size:1rem;">${item.Doer.Name} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">(${item.Doer.Category})</span></h4>
+            </div>
+            
+            <div class="action-row" style="margin-top: 1rem;">
+                <a href="/service/${item.Service.ID}" class="btn btn-secondary" style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;">Details / Order</a>
+            </div>
+        `;
+        return card;
+    };
+
+    // Handle Search Bar Input
+    let debounceTimer;
+    if(searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                currentSearch = e.target.value.trim();
+                serviceSkip = 0; // reset pagination
+                serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%;">Searching...</div>';
+                loadMoreServicesBtn.disabled = false;
+                loadMoreServicesBtn.innerText = "Next";
+
+                try {
+                    const res = await fetch(`/api/services?skip=0&limit=6&q=${encodeURIComponent(currentSearch)}`);
+                    const data = await res.json();
+                    
+                    serviceGrid.innerHTML = ''; // clear grid entirely
+                    if (!data || data.length === 0) {
+                        serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:var(--text-muted);">No services found matching your search.</div>';
+                        loadMoreServicesBtn.disabled = true;
+                        return;
+                    }
+
+                    data.forEach(item => {
+                        serviceGrid.appendChild(renderServiceCard(item));
+                    });
+                    serviceSkip = data.length;
+                    
+                    if(data.length < 6) loadMoreServicesBtn.disabled = true;
+
+                } catch (err) {
+                    console.error(err);
+                    serviceGrid.innerHTML = '<div style="text-align:center; padding:2rem; width:100%; color:red;">Error searching services.</div>';
+                }
+            }, 300); // 300ms debounce
+        });
+    }
+
+    // Handle "Next" Button for Services
     if(loadMoreServicesBtn) {
         loadMoreServicesBtn.addEventListener('click', async () => {
             loadMoreServicesBtn.innerText = "Loading...";
             try {
-                const res = await fetch(`/api/services?skip=${serviceSkip}&limit=5`);
+                const res = await fetch(`/api/services?skip=${serviceSkip}&limit=6&q=${encodeURIComponent(currentSearch)}`);
                 const data = await res.json();
                 if (!data || data.length === 0) {
-                    loadMoreServicesBtn.innerText = "No more services found";
+                    loadMoreServicesBtn.innerText = "No more";
                     loadMoreServicesBtn.disabled = true;
                     return;
                 }
 
                 data.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.innerHTML = `
-                        ${item.Doer.FlyerURL ? `<img src="${item.Doer.FlyerURL}" style="width:100%; height:200px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">` : ''}
-                        <h3>${item.Service.Title} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">$${item.Service.Price}</span></h3>
-                        <p style="margin: 0.5rem 0;">${item.Service.Description}</p>
-                        
-                        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
-                            <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
-                            <h4 style="margin: 0.25rem 0;">${item.Doer.Name} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">(${item.Doer.Category})</span></h4>
-                            <p class="text-muted" style="margin-bottom: 0.25rem;">✉️ ${item.Doer.Email}</p>
-                            ${item.Doer.ZipCode ? `<p class="text-muted" style="font-size:0.8rem;">📍 Zip: ${item.Doer.ZipCode} (within ${item.Doer.Radius} miles)</p>` : ''}
-                        </div>
-                        
-                        <div class="action-row" style="margin-top: 1.5rem;">
-                            <a href="/service/${item.Service.ID}" class="btn btn-secondary" style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;">Details / Order</a>
-                        </div>
-                    `;
-                    serviceGrid.appendChild(card);
+                    serviceGrid.appendChild(renderServiceCard(item));
                 });
                 serviceSkip += data.length;
-                loadMoreServicesBtn.innerText = "Load Next 5 Services";
-                
-                // Scroll container right
-                serviceGrid.scrollBy({ left: 320, behavior: 'smooth' });
+                loadMoreServicesBtn.innerText = "Next";
+
+                if(data.length < 6) {
+                    loadMoreServicesBtn.disabled = true;
+                    loadMoreServicesBtn.innerText = "No more";
+                }
             } catch (e) {
                 console.error(e);
                 loadMoreServicesBtn.innerText = "Error Loading";
@@ -124,7 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    let eventSkip = 5;
+    // Handle "Next" Button for Events
+    let eventSkip = 4;
     const eventGrid = document.getElementById('event-grid');
     const loadMoreEventsBtn = document.getElementById('load-more-events');
     const userRole = eventGrid.getAttribute('data-role');
@@ -133,10 +170,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loadMoreEventsBtn.addEventListener('click', async () => {
             loadMoreEventsBtn.innerText = "Loading...";
             try {
-                const res = await fetch(`/api/events?skip=${eventSkip}&limit=5`);
+                const res = await fetch(`/api/events?skip=${eventSkip}&limit=4`);
                 const data = await res.json();
                 if (!data || data.length === 0) {
-                    loadMoreEventsBtn.innerText = "No more events found";
+                    loadMoreEventsBtn.innerText = "No more";
                     loadMoreEventsBtn.disabled = true;
                     return;
                 }
@@ -155,9 +192,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     card.innerHTML = `
                         <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">${item.Date}</div>
-                        <h3>${item.Title}</h3>
-                        <p style="color: var(--accent); margin: 0.5rem 0;">📍 ${item.Location}</p>
-                        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">${item.Description}</p>
+                        <h3 style="font-size:1.25rem;">${item.Title}</h3>
+                        <p style="color: var(--accent); margin: 0.5rem 0; font-size:0.9rem;">📍 ${item.Location}</p>
+                        <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size:0.95rem;">${item.Description}</p>
                         <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
                             <a href="/event/${item.ID}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
                             ${rsvpHtml}
@@ -166,10 +203,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     eventGrid.appendChild(card);
                 });
                 eventSkip += data.length;
-                loadMoreEventsBtn.innerText = "Load Next 5 Events";
+                loadMoreEventsBtn.innerText = "Next";
                 
                 // Scroll container right
-                eventGrid.scrollBy({ left: 320, behavior: 'smooth' });
+                eventGrid.scrollBy({ left: 260, behavior: 'smooth' });
+                
+                if(data.length < 4) {
+                    loadMoreEventsBtn.disabled = true;
+                    loadMoreEventsBtn.innerText = "No more";
+                }
             } catch (e) {
                 console.error(e);
                 loadMoreEventsBtn.innerText = "Error Loading";

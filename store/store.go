@@ -249,7 +249,7 @@ func (d *Database) AutoArchivePastEvents() {
 }
 
 // ----------------- SERVICE QUERIES (MONGO) -----------------
-func (d *Database) GetAllServices(skip int64, limit int64) []models.Service {
+func (d *Database) GetAllServices(skip int64, limit int64, search string) []models.Service {
 	collection := d.Mongo.Collection("services")
 	var services []models.Service
 	
@@ -262,7 +262,12 @@ func (d *Database) GetAllServices(skip int64, limit int64) []models.Service {
 		findOptions.SetLimit(limit)
 	}
 	
-	cursor, err := collection.Find(context.TODO(), bson.M{}, findOptions)
+	filter := bson.M{}
+	if search != "" {
+		filter["title"] = primitive.Regex{Pattern: search, Options: "i"}
+	}
+	
+	cursor, err := collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
 		return services
 	}

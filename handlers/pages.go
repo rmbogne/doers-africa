@@ -67,8 +67,9 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
-	services := store.DB.GetAllServices(0, 5)
-	upcomingEvents := store.DB.GetUpcomingEvents(0, 5)
+	search := r.URL.Query().Get("q")
+	services := store.DB.GetAllServices(0, 6, search)
+	upcomingEvents := store.DB.GetUpcomingEvents(0, 4)
 	
 	var serviceViews []ServiceView
 	for _, s := range services {
