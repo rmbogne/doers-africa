@@ -3,14 +3,26 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/mbogne/african-doers/handlers"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/store"
 )
 
+func backgroundWorker() {
+	store.DB.AutoArchivePastEvents() // Run immediately on startup
+	
+	ticker := time.NewTicker(24 * time.Hour)
+	for {
+		<-ticker.C
+		store.DB.AutoArchivePastEvents()
+	}
+}
+
 func main() {
 	store.InitStore()
+	go backgroundWorker()
 
 	mux := http.NewServeMux()
 

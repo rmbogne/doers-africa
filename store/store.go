@@ -233,6 +233,18 @@ func (d *Database) ArchiveEvent(id string) {
 	d.Mongo.Collection("events").DeleteOne(context.TODO(), bson.M{"_id": objID})
 }
 
+func (d *Database) AutoArchivePastEvents() {
+	collection := d.Mongo.Collection("events")
+	today := time.Now().Format("2006-01-02")
+	
+	res, err := collection.DeleteMany(context.TODO(), bson.M{"date": bson.M{"$lt": today}})
+	if err != nil {
+		log.Printf("Failed to auto-archive events: %v", err)
+	} else if res.DeletedCount > 0 {
+		log.Printf("Auto-archived %d past events", res.DeletedCount)
+	}
+}
+
 // ----------------- SERVICE QUERIES (MONGO) -----------------
 func (d *Database) GetAllServices() []models.Service {
 	collection := d.Mongo.Collection("services")
