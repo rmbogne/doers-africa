@@ -38,7 +38,6 @@ func APIServicesHandler(w http.ResponseWriter, r *http.Request) {
 		doer, ok := store.DB.GetDoer(s.DoerID)
 		if ok {
 			// strip password from being JSON encoded!
-			doer.Password = "" 
 			views = append(views, ServiceView{Service: s, Doer: doer})
 		}
 	}

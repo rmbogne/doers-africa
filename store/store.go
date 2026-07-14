@@ -81,7 +81,7 @@ func setupPGSchema() {
 
 // ----------------- DOER QUERIES (PG) -----------------
 func (d *Database) RegisterDoer(doer models.Doer) {
-	_, err := d.PG.Exec(`INSERT INTO doers (name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, doer.Name, doer.Email, doer.Password, doer.Category, doer.Description, doer.ZipCode, doer.Radius, doer.Facebook, doer.TikTok, doer.Instagram, doer.FlyerURL)
+	_, err := d.PG.Exec(`INSERT INTO doers (name, email, password_hash, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, doer.Name, doer.Email, doer.PasswordHash, doer.Category, doer.Description, doer.ZipCode, doer.Radius, doer.Facebook, doer.TikTok, doer.Instagram, doer.FlyerURL)
 	if err != nil {
 		log.Printf("RegisterDoer error: %v", err)
 	}
@@ -89,13 +89,14 @@ func (d *Database) RegisterDoer(doer models.Doer) {
 
 func (d *Database) GetDoerAuth(email, password string) (models.Doer, bool) {
 	var doer models.Doer
-	err := d.PG.QueryRow(`SELECT id, name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE email=$1 AND password=$2`, email, password).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Password, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
+	err := d.PG.QueryRow(`SELECT id, name, email, password_hash, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE email=$1 AND password=$2`, email, password).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.PasswordHash, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
 	if err != nil {
 		return doer, false
 	}
 	return doer, true
 }
 
+/*
 func (d *Database) GetDoer(id int) (models.Doer, bool) {
 	var doer models.Doer
 	err := d.PG.QueryRow(`SELECT id, name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE id=$1`, id).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Password, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
@@ -104,7 +105,49 @@ func (d *Database) GetDoer(id int) (models.Doer, bool) {
 	}
 	return doer, true
 }
+*/
 
+func (d *Database) GetDoer(id int) (models.Doer, bool) {
+	var doer models.Doer
+
+	const query = `
+		SELECT
+			id,
+			name,
+			email,
+			category,
+			description,
+			zipcode,
+			radius,
+			facebook,
+			tiktok,
+			instagram,
+			flyer_url
+		FROM doers
+		WHERE id = $1
+	`
+
+	err := d.PG.QueryRow(query, id).Scan(
+		&doer.ID,
+		&doer.Name,
+		&doer.Email,
+		&doer.Category,
+		&doer.Description,
+		&doer.ZipCode,
+		&doer.Radius,
+		&doer.Facebook,
+		&doer.TikTok,
+		&doer.Instagram,
+		&doer.FlyerURL,
+	)
+	if err != nil {
+		return models.Doer{}, false
+	}
+
+	return doer, true
+}
+
+/*
 func (d *Database) GetAllDoers() []models.Doer {
 	rows, err := d.PG.Query(`SELECT id, name, email, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers`)
 	if err != nil {
@@ -117,6 +160,65 @@ func (d *Database) GetAllDoers() []models.Doer {
 		rows.Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
 		doers = append(doers, doer)
 	}
+	return doers
+}
+*/
+
+func (d *Database) GetAllDoers() []models.Doer {
+	const query = `
+		SELECT
+			id,
+			name,
+			email,
+			category,
+			description,
+			zipcode,
+			radius,
+			facebook,
+			tiktok,
+			instagram,
+			flyer_url
+		FROM doers
+		ORDER BY id
+	`
+
+	rows, err := d.PG.Query(query)
+	if err != nil {
+		log.Printf("GetAllDoers query error: %v", err)
+		return []models.Doer{}
+	}
+	defer rows.Close()
+
+	doers := make([]models.Doer, 0)
+
+	for rows.Next() {
+		var doer models.Doer
+
+		err := rows.Scan(
+			&doer.ID,
+			&doer.Name,
+			&doer.Email,
+			&doer.Category,
+			&doer.Description,
+			&doer.ZipCode,
+			&doer.Radius,
+			&doer.Facebook,
+			&doer.TikTok,
+			&doer.Instagram,
+			&doer.FlyerURL,
+		)
+		if err != nil {
+			log.Printf("GetAllDoers scan error: %v", err)
+			continue
+		}
+
+		doers = append(doers, doer)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("GetAllDoers rows error: %v", err)
+	}
+
 	return doers
 }
 
@@ -153,7 +255,7 @@ func (d *Database) UpdateEvent(id string, event models.Event) error {
 	if err != nil {
 		return err
 	}
-	
+
 	update := bson.M{
 		"$set": bson.M{
 			"title":       event.Title,
@@ -181,10 +283,10 @@ func (d *Database) GetAllEvents() []models.Event {
 func (d *Database) GetUpcomingEvents(skip int64, limit int64) []models.Event {
 	collection := d.Mongo.Collection("events")
 	var events []models.Event
-	
+
 	today := time.Now().Format("2006-01-02")
 	filter := bson.M{"date": bson.M{"$gte": today}}
-	
+
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{Key: "date", Value: 1}}) // Ascending order
 	if skip > 0 {
@@ -193,7 +295,7 @@ func (d *Database) GetUpcomingEvents(skip int64, limit int64) []models.Event {
 	if limit > 0 {
 		findOptions.SetLimit(limit)
 	}
-	
+
 	cursor, err := collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
 		return events
@@ -239,7 +341,7 @@ func (d *Database) ArchiveEvent(id string) {
 func (d *Database) AutoArchivePastEvents() {
 	collection := d.Mongo.Collection("events")
 	today := time.Now().Format("2006-01-02")
-	
+
 	res, err := collection.DeleteMany(context.TODO(), bson.M{"date": bson.M{"$lt": today}})
 	if err != nil {
 		log.Printf("Failed to auto-archive events: %v", err)
@@ -252,7 +354,7 @@ func (d *Database) AutoArchivePastEvents() {
 func (d *Database) GetAllServices(skip int64, limit int64, search string) []models.Service {
 	collection := d.Mongo.Collection("services")
 	var services []models.Service
-	
+
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{Key: "_id", Value: -1}}) // Newest first
 	if skip > 0 {
@@ -261,12 +363,12 @@ func (d *Database) GetAllServices(skip int64, limit int64, search string) []mode
 	if limit > 0 {
 		findOptions.SetLimit(limit)
 	}
-	
+
 	filter := bson.M{}
 	if search != "" {
 		filter["title"] = primitive.Regex{Pattern: search, Options: "i"}
 	}
-	
+
 	cursor, err := collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
 		return services
