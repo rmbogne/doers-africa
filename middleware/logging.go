@@ -15,7 +15,7 @@ func Logger(next http.Handler) http.Handler {
 
 		// Create a custom response writer to capture the status code
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-		
+
 		next.ServeHTTP(rw, r)
 
 		duration := time.Since(start)

@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -22,17 +24,29 @@ type Database struct {
 var DB *Database
 
 func InitStore() {
-	// Initialize Postgres
-	connStr := "host=localhost port=5433 user=user password=password dbname=africandoers sslmode=disable"
-	pg, err := sql.Open("postgres", connStr)
+	const postgresConnectionString = "host=localhost port=5433 user=user password=password dbname=africandoers sslmode=disable"
+
+	pg, err := sql.Open("postgres", postgresConnectionString)
 	if err != nil {
-		log.Fatalf("Failed to connect to postgres: %v", err)
+		log.Fatalf("Failed to initialize PostgreSQL: %v", err)
 	}
 
-	// Initialize MongoDB
-	clientOptions := options.Client().ApplyURI("mongodb://root:password@localhost:27017")
-	mongoClient, err := mongo.Connect(context.TODO(), clientOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := pg.PingContext(ctx); err != nil {
+		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+	}
+
+	mongoClientOptions := options.Client().
+		ApplyURI("mongodb://root:password@localhost:27017")
+
+	mongoClient, err := mongo.Connect(ctx, mongoClientOptions)
 	if err != nil {
+		log.Fatalf("Failed to initialize MongoDB: %v", err)
+	}
+
+	if err := mongoClient.Ping(ctx, nil); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 
@@ -45,67 +59,136 @@ func InitStore() {
 }
 
 func setupPGSchema() {
-	query := `
-	CREATE TABLE IF NOT EXISTS doers (
-		id SERIAL PRIMARY KEY,
-		name VARCHAR(255),
-		email VARCHAR(255) UNIQUE,
-		password VARCHAR(255),
-		category VARCHAR(255),
-		description TEXT,
-		zipcode VARCHAR(50),
-		radius INT,
-		facebook VARCHAR(255),
-		tiktok VARCHAR(255),
-		instagram VARCHAR(255),
-		flyer_url VARCHAR(255)
-	);
+	const query = `
+		CREATE TABLE IF NOT EXISTS doers (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			email VARCHAR(255) NOT NULL UNIQUE,
+			password_hash VARCHAR(255) NOT NULL,
+			category VARCHAR(255),
+			description TEXT,
+			zipcode VARCHAR(50),
+			radius INT,
+			facebook VARCHAR(255),
+			tiktok VARCHAR(255),
+			instagram VARCHAR(255),
+			flyer_url VARCHAR(255)
+		);
 
-	CREATE TABLE IF NOT EXISTS customers (
-		id SERIAL PRIMARY KEY,
-		name VARCHAR(255),
-		email VARCHAR(255) UNIQUE,
-		password VARCHAR(255)
-	);
+		CREATE TABLE IF NOT EXISTS customers (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			email VARCHAR(255) NOT NULL UNIQUE,
+			password_hash VARCHAR(255) NOT NULL
+		);
 
-	CREATE TABLE IF NOT EXISTS rsvps (
-		event_id VARCHAR(255),
-		customer_id INT,
-		PRIMARY KEY (event_id, customer_id)
-	);`
-	_, err := DB.PG.Exec(query)
-	if err != nil {
-		log.Printf("Warning: Failed to setup PG tables: %v", err)
+		CREATE TABLE IF NOT EXISTS rsvps (
+			event_id VARCHAR(255),
+			customer_id INT,
+			PRIMARY KEY (event_id, customer_id)
+		);
+	`
+
+	if _, err := DB.PG.Exec(query); err != nil {
+		log.Printf("Warning: failed to set up PostgreSQL tables: %v", err)
 	}
 }
 
 // ----------------- DOER QUERIES (PG) -----------------
-func (d *Database) RegisterDoer(doer models.Doer) {
-	_, err := d.PG.Exec(`INSERT INTO doers (name, email, password_hash, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, doer.Name, doer.Email, doer.PasswordHash, doer.Category, doer.Description, doer.ZipCode, doer.Radius, doer.Facebook, doer.TikTok, doer.Instagram, doer.FlyerURL)
+
+func (d *Database) RegisterDoer(
+	ctx context.Context,
+	doer models.Doer,
+) error {
+	const query = `
+		INSERT INTO doers (
+			name,
+			email,
+			password_hash,
+			category,
+			description,
+			zipcode,
+			radius,
+			facebook,
+			tiktok,
+			instagram,
+			flyer_url
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`
+
+	_, err := d.PG.ExecContext(
+		ctx,
+		query,
+		doer.Name,
+		doer.Email,
+		doer.PasswordHash,
+		doer.Category,
+		doer.Description,
+		doer.ZipCode,
+		doer.Radius,
+		doer.Facebook,
+		doer.TikTok,
+		doer.Instagram,
+		doer.FlyerURL,
+	)
 	if err != nil {
-		log.Printf("RegisterDoer error: %v", err)
+		return fmt.Errorf("register doer: %w", err)
 	}
+
+	return nil
 }
 
-func (d *Database) GetDoerAuth(email, password string) (models.Doer, bool) {
+// GetDoerByEmail is used only during authentication because it retrieves the
+// stored password hash. General doer queries must not retrieve password hashes.
+func (d *Database) GetDoerByEmail(
+	ctx context.Context,
+	email string,
+) (models.Doer, error) {
 	var doer models.Doer
-	err := d.PG.QueryRow(`SELECT id, name, email, password_hash, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE email=$1 AND password=$2`, email, password).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.PasswordHash, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
-	if err != nil {
-		return doer, false
-	}
-	return doer, true
-}
 
-/*
-func (d *Database) GetDoer(id int) (models.Doer, bool) {
-	var doer models.Doer
-	err := d.PG.QueryRow(`SELECT id, name, email, password, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers WHERE id=$1`, id).Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Password, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
+	const query = `
+		SELECT
+			id,
+			name,
+			email,
+			password_hash,
+			category,
+			description,
+			zipcode,
+			radius,
+			facebook,
+			tiktok,
+			instagram,
+			flyer_url
+		FROM doers
+		WHERE LOWER(email) = LOWER($1)
+	`
+
+	err := d.PG.QueryRowContext(
+		ctx,
+		query,
+		strings.TrimSpace(email),
+	).Scan(
+		&doer.ID,
+		&doer.Name,
+		&doer.Email,
+		&doer.PasswordHash,
+		&doer.Category,
+		&doer.Description,
+		&doer.ZipCode,
+		&doer.Radius,
+		&doer.Facebook,
+		&doer.TikTok,
+		&doer.Instagram,
+		&doer.FlyerURL,
+	)
 	if err != nil {
-		return doer, false
+		return models.Doer{}, err
 	}
-	return doer, true
+
+	return doer, nil
 }
-*/
 
 func (d *Database) GetDoer(id int) (models.Doer, bool) {
 	var doer models.Doer
@@ -147,23 +230,6 @@ func (d *Database) GetDoer(id int) (models.Doer, bool) {
 	return doer, true
 }
 
-/*
-func (d *Database) GetAllDoers() []models.Doer {
-	rows, err := d.PG.Query(`SELECT id, name, email, category, description, zipcode, radius, facebook, tiktok, instagram, flyer_url FROM doers`)
-	if err != nil {
-		return []models.Doer{}
-	}
-	defer rows.Close()
-	var doers []models.Doer
-	for rows.Next() {
-		var doer models.Doer
-		rows.Scan(&doer.ID, &doer.Name, &doer.Email, &doer.Category, &doer.Description, &doer.ZipCode, &doer.Radius, &doer.Facebook, &doer.TikTok, &doer.Instagram, &doer.FlyerURL)
-		doers = append(doers, doer)
-	}
-	return doers
-}
-*/
-
 func (d *Database) GetAllDoers() []models.Doer {
 	const query = `
 		SELECT
@@ -194,7 +260,7 @@ func (d *Database) GetAllDoers() []models.Doer {
 	for rows.Next() {
 		var doer models.Doer
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&doer.ID,
 			&doer.Name,
 			&doer.Email,
@@ -206,8 +272,7 @@ func (d *Database) GetAllDoers() []models.Doer {
 			&doer.TikTok,
 			&doer.Instagram,
 			&doer.FlyerURL,
-		)
-		if err != nil {
+		); err != nil {
 			log.Printf("GetAllDoers scan error: %v", err)
 			continue
 		}
@@ -223,35 +288,89 @@ func (d *Database) GetAllDoers() []models.Doer {
 }
 
 // ----------------- CUSTOMER QUERIES (PG) -----------------
-func (d *Database) RegisterCustomer(name, email, password string) {
-	_, err := d.PG.Exec(`INSERT INTO customers (name, email, password) VALUES ($1, $2, $3)`, name, email, password)
+
+func (d *Database) RegisterCustomer(
+	ctx context.Context,
+	customer models.Customer,
+) error {
+	const query = `
+		INSERT INTO customers (
+			name,
+			email,
+			password_hash
+		)
+		VALUES ($1, $2, $3)
+	`
+
+	_, err := d.PG.ExecContext(
+		ctx,
+		query,
+		customer.Name,
+		customer.Email,
+		customer.PasswordHash,
+	)
 	if err != nil {
-		log.Printf("RegisterCustomer error: %v", err)
+		return fmt.Errorf("register customer: %w", err)
 	}
+
+	return nil
 }
 
-func (d *Database) GetCustomerAuth(email, password string) (models.Customer, bool) {
-	var cust models.Customer
-	err := d.PG.QueryRow(`SELECT id, name, email, password FROM customers WHERE email=$1 AND password=$2`, email, password).Scan(&cust.ID, &cust.Name, &cust.Email, &cust.Password)
+// GetCustomerByEmail is used only during authentication because it retrieves
+// the stored password hash.
+func (d *Database) GetCustomerByEmail(
+	ctx context.Context,
+	email string,
+) (models.Customer, error) {
+	var customer models.Customer
+
+	const query = `
+		SELECT
+			id,
+			name,
+			email,
+			password_hash
+		FROM customers
+		WHERE LOWER(email) = LOWER($1)
+	`
+
+	err := d.PG.QueryRowContext(
+		ctx,
+		query,
+		strings.TrimSpace(email),
+	).Scan(
+		&customer.ID,
+		&customer.Name,
+		&customer.Email,
+		&customer.PasswordHash,
+	)
 	if err != nil {
-		return cust, false
+		return models.Customer{}, err
 	}
-	return cust, true
+
+	return customer, nil
 }
 
 // ----------------- EVENT QUERIES (MONGO) -----------------
+
 func (d *Database) AddEvent(event models.Event) (string, error) {
 	collection := d.Mongo.Collection("events")
-	res, err := collection.InsertOne(context.TODO(), event)
+
+	result, err := collection.InsertOne(context.TODO(), event)
 	if err != nil {
 		return "", err
 	}
-	id := res.InsertedID.(primitive.ObjectID).Hex()
-	return id, nil
+
+	id, ok := result.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return "", fmt.Errorf("unexpected event ID type %T", result.InsertedID)
+	}
+
+	return id.Hex(), nil
 }
 
 func (d *Database) UpdateEvent(id string, event models.Event) error {
-	objID, err := primitive.ObjectIDFromHex(id)
+	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return err
 	}
@@ -264,31 +383,45 @@ func (d *Database) UpdateEvent(id string, event models.Event) error {
 			"location":    event.Location,
 		},
 	}
-	_, err = d.Mongo.Collection("events").UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+
+	_, err = d.Mongo.Collection("events").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": objectID},
+		update,
+	)
+
 	return err
 }
 
 func (d *Database) GetAllEvents() []models.Event {
 	collection := d.Mongo.Collection("events")
-	var events []models.Event
+	events := make([]models.Event, 0)
+
 	cursor, err := collection.Find(context.TODO(), bson.M{})
 	if err != nil {
+		log.Printf("GetAllEvents query error: %v", err)
 		return events
 	}
 	defer cursor.Close(context.TODO())
-	cursor.All(context.TODO(), &events)
+
+	if err := cursor.All(context.TODO(), &events); err != nil {
+		log.Printf("GetAllEvents decode error: %v", err)
+		return []models.Event{}
+	}
+
 	return events
 }
 
 func (d *Database) GetUpcomingEvents(skip int64, limit int64) []models.Event {
 	collection := d.Mongo.Collection("events")
-	var events []models.Event
+	events := make([]models.Event, 0)
 
 	today := time.Now().Format("2006-01-02")
 	filter := bson.M{"date": bson.M{"$gte": today}}
 
-	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{Key: "date", Value: 1}}) // Ascending order
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "date", Value: 1}})
+
 	if skip > 0 {
 		findOptions.SetSkip(skip)
 	}
@@ -298,65 +431,101 @@ func (d *Database) GetUpcomingEvents(skip int64, limit int64) []models.Event {
 
 	cursor, err := collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
+		log.Printf("GetUpcomingEvents query error: %v", err)
 		return events
 	}
 	defer cursor.Close(context.TODO())
-	cursor.All(context.TODO(), &events)
+
+	if err := cursor.All(context.TODO(), &events); err != nil {
+		log.Printf("GetUpcomingEvents decode error: %v", err)
+		return []models.Event{}
+	}
+
 	return events
 }
 
 func (d *Database) GetEvent(id string) (models.Event, bool) {
 	var event models.Event
-	objID, err := primitive.ObjectIDFromHex(id)
+
+	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return event, false
+		return models.Event{}, false
 	}
-	err = d.Mongo.Collection("events").FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&event)
+
+	err = d.Mongo.Collection("events").
+		FindOne(context.TODO(), bson.M{"_id": objectID}).
+		Decode(&event)
 	if err != nil {
-		return event, false
+		return models.Event{}, false
 	}
+
 	return event, true
 }
 
 func (d *Database) GetEventsByDoer(doerID int) []models.Event {
-	collection := d.Mongo.Collection("events")
-	var events []models.Event
-	cursor, err := collection.Find(context.TODO(), bson.M{"doer_id": doerID})
+	events := make([]models.Event, 0)
+
+	cursor, err := d.Mongo.Collection("events").
+		Find(context.TODO(), bson.M{"doer_id": doerID})
 	if err != nil {
+		log.Printf("GetEventsByDoer query error: %v", err)
 		return events
 	}
 	defer cursor.Close(context.TODO())
-	cursor.All(context.TODO(), &events)
+
+	if err := cursor.All(context.TODO(), &events); err != nil {
+		log.Printf("GetEventsByDoer decode error: %v", err)
+		return []models.Event{}
+	}
+
 	return events
 }
 
 func (d *Database) ArchiveEvent(id string) {
-	objID, err := primitive.ObjectIDFromHex(id)
+	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
+		log.Printf("ArchiveEvent invalid ID: %v", err)
 		return
 	}
-	d.Mongo.Collection("events").DeleteOne(context.TODO(), bson.M{"_id": objID})
+
+	if _, err := d.Mongo.Collection("events").DeleteOne(
+		context.TODO(),
+		bson.M{"_id": objectID},
+	); err != nil {
+		log.Printf("ArchiveEvent delete error: %v", err)
+	}
 }
 
 func (d *Database) AutoArchivePastEvents() {
 	collection := d.Mongo.Collection("events")
 	today := time.Now().Format("2006-01-02")
 
-	res, err := collection.DeleteMany(context.TODO(), bson.M{"date": bson.M{"$lt": today}})
+	result, err := collection.DeleteMany(
+		context.TODO(),
+		bson.M{"date": bson.M{"$lt": today}},
+	)
 	if err != nil {
 		log.Printf("Failed to auto-archive events: %v", err)
-	} else if res.DeletedCount > 0 {
-		log.Printf("Auto-archived %d past events", res.DeletedCount)
+		return
+	}
+
+	if result.DeletedCount > 0 {
+		log.Printf("Auto-archived %d past events", result.DeletedCount)
 	}
 }
 
 // ----------------- SERVICE QUERIES (MONGO) -----------------
-func (d *Database) GetAllServices(skip int64, limit int64, search string) []models.Service {
-	collection := d.Mongo.Collection("services")
-	var services []models.Service
 
-	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{Key: "_id", Value: -1}}) // Newest first
+func (d *Database) GetAllServices(
+	skip int64,
+	limit int64,
+	search string,
+) []models.Service {
+	services := make([]models.Service, 0)
+
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "_id", Value: -1}})
+
 	if skip > 0 {
 		findOptions.SetSkip(skip)
 	}
@@ -365,87 +534,159 @@ func (d *Database) GetAllServices(skip int64, limit int64, search string) []mode
 	}
 
 	filter := bson.M{}
+	search = strings.TrimSpace(search)
 	if search != "" {
-		filter["title"] = primitive.Regex{Pattern: search, Options: "i"}
+		filter["title"] = primitive.Regex{
+			Pattern: search,
+			Options: "i",
+		}
 	}
 
-	cursor, err := collection.Find(context.TODO(), filter, findOptions)
+	cursor, err := d.Mongo.Collection("services").
+		Find(context.TODO(), filter, findOptions)
 	if err != nil {
+		log.Printf("GetAllServices query error: %v", err)
 		return services
 	}
 	defer cursor.Close(context.TODO())
-	cursor.All(context.TODO(), &services)
+
+	if err := cursor.All(context.TODO(), &services); err != nil {
+		log.Printf("GetAllServices decode error: %v", err)
+		return []models.Service{}
+	}
+
 	return services
 }
 
 func (d *Database) GetService(id string) (models.Service, bool) {
 	var service models.Service
-	objID, err := primitive.ObjectIDFromHex(id)
+
+	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return service, false
+		return models.Service{}, false
 	}
-	err = d.Mongo.Collection("services").FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&service)
+
+	err = d.Mongo.Collection("services").
+		FindOne(context.TODO(), bson.M{"_id": objectID}).
+		Decode(&service)
 	if err != nil {
-		return service, false
+		return models.Service{}, false
 	}
+
 	return service, true
 }
 
 func (d *Database) AddService(service models.Service) (string, error) {
-	collection := d.Mongo.Collection("services")
-	res, err := collection.InsertOne(context.TODO(), service)
+	result, err := d.Mongo.Collection("services").
+		InsertOne(context.TODO(), service)
 	if err != nil {
 		return "", err
 	}
-	id := res.InsertedID.(primitive.ObjectID).Hex()
-	return id, nil
+
+	id, ok := result.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return "", fmt.Errorf("unexpected service ID type %T", result.InsertedID)
+	}
+
+	return id.Hex(), nil
 }
 
 func (d *Database) GetServicesByDoer(doerID int) []models.Service {
-	collection := d.Mongo.Collection("services")
-	var services []models.Service
-	cursor, err := collection.Find(context.TODO(), bson.M{"doer_id": doerID})
+	services := make([]models.Service, 0)
+
+	cursor, err := d.Mongo.Collection("services").
+		Find(context.TODO(), bson.M{"doer_id": doerID})
 	if err != nil {
+		log.Printf("GetServicesByDoer query error: %v", err)
 		return services
 	}
 	defer cursor.Close(context.TODO())
-	cursor.All(context.TODO(), &services)
+
+	if err := cursor.All(context.TODO(), &services); err != nil {
+		log.Printf("GetServicesByDoer decode error: %v", err)
+		return []models.Service{}
+	}
+
 	return services
 }
 
 func (d *Database) ArchiveService(id string) {
-	objID, err := primitive.ObjectIDFromHex(id)
+	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
+		log.Printf("ArchiveService invalid ID: %v", err)
 		return
 	}
-	d.Mongo.Collection("services").DeleteOne(context.TODO(), bson.M{"_id": objID})
+
+	if _, err := d.Mongo.Collection("services").DeleteOne(
+		context.TODO(),
+		bson.M{"_id": objectID},
+	); err != nil {
+		log.Printf("ArchiveService delete error: %v", err)
+	}
 }
 
 // ----------------- RSVP QUERIES (PG) -----------------
+
 func (d *Database) RecordRSVP(eventID string, customerID int) {
-	d.PG.Exec(`INSERT INTO rsvps (event_id, customer_id) VALUES ($1, $2)`, eventID, customerID)
+	const query = `
+		INSERT INTO rsvps (event_id, customer_id)
+		VALUES ($1, $2)
+		ON CONFLICT (event_id, customer_id) DO NOTHING
+	`
+
+	if _, err := d.PG.Exec(query, eventID, customerID); err != nil {
+		log.Printf("RecordRSVP error: %v", err)
+	}
 }
 
 func (d *Database) GetCustomerRSVPs(customerID int) []models.Event {
-	rows, err := d.PG.Query(`SELECT event_id FROM rsvps WHERE customer_id=$1`, customerID)
+	rows, err := d.PG.Query(
+		`SELECT event_id FROM rsvps WHERE customer_id = $1`,
+		customerID,
+	)
 	if err != nil {
+		log.Printf("GetCustomerRSVPs query error: %v", err)
 		return []models.Event{}
 	}
 	defer rows.Close()
 
-	var events []models.Event
+	events := make([]models.Event, 0)
+
 	for rows.Next() {
-		var eid string
-		rows.Scan(&eid)
-		if ev, ok := d.GetEvent(eid); ok {
-			events = append(events, ev)
+		var eventID string
+
+		if err := rows.Scan(&eventID); err != nil {
+			log.Printf("GetCustomerRSVPs scan error: %v", err)
+			continue
+		}
+
+		if event, ok := d.GetEvent(eventID); ok {
+			events = append(events, event)
 		}
 	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("GetCustomerRSVPs rows error: %v", err)
+	}
+
 	return events
 }
 
 func (d *Database) HasRSVPd(eventID string, customerID int) bool {
-	var dummy string
-	err := d.PG.QueryRow(`SELECT event_id FROM rsvps WHERE event_id=$1 AND customer_id=$2`, eventID, customerID).Scan(&dummy)
-	return err == nil
+	var exists bool
+
+	err := d.PG.QueryRow(
+		`
+			SELECT EXISTS (
+				SELECT 1
+				FROM rsvps
+				WHERE event_id = $1
+				  AND customer_id = $2
+			)
+		`,
+		eventID,
+		customerID,
+	).Scan(&exists)
+
+	return err == nil && exists
 }

@@ -29,9 +29,9 @@ func getSkipLimit(r *http.Request) (int64, int64) {
 func APIServicesHandler(w http.ResponseWriter, r *http.Request) {
 	skip, limit := getSkipLimit(r)
 	search := r.URL.Query().Get("q")
-	
+
 	services := store.DB.GetAllServices(skip, limit, search)
-	
+
 	// Format as views
 	views := []ServiceView{}
 	for _, s := range services {
@@ -41,19 +41,19 @@ func APIServicesHandler(w http.ResponseWriter, r *http.Request) {
 			views = append(views, ServiceView{Service: s, Doer: doer})
 		}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(views)
 }
 
 func APIEventsHandler(w http.ResponseWriter, r *http.Request) {
 	skip, limit := getSkipLimit(r)
-	
+
 	events := store.DB.GetUpcomingEvents(skip, limit)
 	if events == nil {
 		events = []models.Event{}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(events)
 }

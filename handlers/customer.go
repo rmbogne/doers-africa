@@ -21,7 +21,7 @@ func CustomerRSVPHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	pathParts := strings.Split(r.URL.Path, "/")
 	if len(pathParts) < 3 {
 		http.NotFound(w, r)

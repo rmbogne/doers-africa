@@ -38,6 +38,15 @@ func Auth(next http.Handler) http.Handler {
 	})
 }
 
+func GetRoleAndID(r *http.Request) (string, int) {
+	session, ok := r.Context().Value(SessionKey).(SessionInfo)
+	if !ok {
+		return "", 0
+	}
+
+	return session.Role, session.ID
+}
+
 // RequireRole wraps a handler to ensure only specific roles can access
 func RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
