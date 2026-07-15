@@ -2,12 +2,17 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
-	"strconv"
-	"strings"
+
+	sessionutil "github.com/mbogne/african-doers/internal/session"
+	"github.com/mbogne/african-doers/store"
 )
 
-// SessionInfo holds the session data
+const sessionCookieName = "session"
+
 type SessionInfo struct {
 	ID   int
 	Role string
@@ -17,49 +22,91 @@ type contextKey string
 
 const SessionKey = contextKey("session")
 
-// Auth middleware extracts session from cookie and sets it in context
 func Auth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session")
-		if err == nil && cookie.Value != "" {
-			// Expected format: "role:id"
-			parts := strings.Split(cookie.Value, ":")
-			if len(parts) == 2 {
-				role := parts[0]
-				id, _ := strconv.Atoi(parts[1])
-
-				info := SessionInfo{ID: id, Role: role}
-				ctx := context.WithValue(r.Context(), SessionKey, info)
-				next.ServeHTTP(w, r.WithContext(ctx))
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie(sessionCookieName)
+			if err != nil || cookie.Value == "" {
+				next.ServeHTTP(w, r)
 				return
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+
+			tokenHash := sessionutil.Hash(cookie.Value)
+
+			authSession, err := store.DB.GetSession(
+				r.Context(),
+				tokenHash,
+			)
+			if err != nil {
+				if !errors.Is(err, sql.ErrNoRows) {
+					log.Printf(
+						"Session lookup error: %v",
+						err,
+					)
+				}
+
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			sessionInfo := SessionInfo{
+				ID:   authSession.UserID,
+				Role: authSession.Role,
+			}
+
+			ctx := context.WithValue(
+				r.Context(),
+				SessionKey,
+				sessionInfo,
+			)
+
+			next.ServeHTTP(
+				w,
+				r.WithContext(ctx),
+			)
+		},
+	)
+}
+
+func RequireRole(
+	requiredRole string,
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			sessionInfo, ok := r.Context().
+				Value(SessionKey).(SessionInfo)
+
+			if !ok {
+				http.Error(
+					w,
+					"Authentication required",
+					http.StatusUnauthorized,
+				)
+				return
+			}
+
+			if sessionInfo.Role != requiredRole {
+				http.Error(
+					w,
+					"Forbidden",
+					http.StatusForbidden,
+				)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		},
+	)
 }
 
 func GetRoleAndID(r *http.Request) (string, int) {
-	session, ok := r.Context().Value(SessionKey).(SessionInfo)
+	sessionInfo, ok := r.Context().
+		Value(SessionKey).(SessionInfo)
+
 	if !ok {
 		return "", 0
 	}
 
-	return session.Role, session.ID
-}
-
-// RequireRole wraps a handler to ensure only specific roles can access
-func RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		val := r.Context().Value(SessionKey)
-		if val == nil {
-			http.Redirect(w, r, "/login?role="+role, http.StatusSeeOther)
-			return
-		}
-		info := val.(SessionInfo)
-		if info.Role != role {
-			http.Error(w, "Forbidden: Invalid Role", http.StatusForbidden)
-			return
-		}
-		next(w, r)
-	}
+	return sessionInfo.Role, sessionInfo.ID
 }

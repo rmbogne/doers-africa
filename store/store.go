@@ -21,6 +21,12 @@ type Database struct {
 	Mongo *mongo.Database
 }
 
+type AuthSession struct {
+	Role      string
+	UserID    int
+	ExpiresAt time.Time
+}
+
 var DB *Database
 
 func InitStore() {
@@ -87,7 +93,22 @@ func setupPGSchema() {
 			customer_id INT,
 			PRIMARY KEY (event_id, customer_id)
 		);
-	`
+
+		CREATE TABLE IF NOT EXISTS sessions (
+		token_hash VARCHAR(64) PRIMARY KEY,
+		role VARCHAR(20) NOT NULL
+	CHECK (role IN ('doer', 'customer')),
+		user_id INT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		expires_at TIMESTAMPTZ NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_sessions_expiration
+			ON sessions (expires_at);
+
+		CREATE INDEX IF NOT EXISTS idx_sessions_user
+			ON sessions (role, user_id);
+		`
 
 	if _, err := DB.PG.Exec(query); err != nil {
 		log.Printf("Warning: failed to set up PostgreSQL tables: %v", err)
@@ -689,4 +710,110 @@ func (d *Database) HasRSVPd(eventID string, customerID int) bool {
 	).Scan(&exists)
 
 	return err == nil && exists
+}
+
+// ----------------- SESSION QUERIES (PG) -----------------
+
+func (d *Database) CreateSession(
+	ctx context.Context,
+	tokenHash string,
+	role string,
+	userID int,
+	expiresAt time.Time,
+) error {
+	const query = `
+		INSERT INTO sessions (
+			token_hash,
+			role,
+			user_id,
+			expires_at
+		)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err := d.PG.ExecContext(
+		ctx,
+		query,
+		tokenHash,
+		role,
+		userID,
+		expiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Database) GetSession(
+	ctx context.Context,
+	tokenHash string,
+) (AuthSession, error) {
+	var authSession AuthSession
+
+	const query = `
+		SELECT
+			role,
+			user_id,
+			expires_at
+		FROM sessions
+		WHERE token_hash = $1
+		  AND expires_at > NOW()
+	`
+
+	err := d.PG.QueryRowContext(
+		ctx,
+		query,
+		tokenHash,
+	).Scan(
+		&authSession.Role,
+		&authSession.UserID,
+		&authSession.ExpiresAt,
+	)
+	if err != nil {
+		return AuthSession{}, err
+	}
+
+	return authSession, nil
+}
+
+func (d *Database) DeleteSession(
+	ctx context.Context,
+	tokenHash string,
+) error {
+	const query = `
+		DELETE FROM sessions
+		WHERE token_hash = $1
+	`
+
+	_, err := d.PG.ExecContext(
+		ctx,
+		query,
+		tokenHash,
+	)
+	if err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Database) DeleteExpiredSessions(
+	ctx context.Context,
+) error {
+	const query = `
+		DELETE FROM sessions
+		WHERE expires_at <= NOW()
+	`
+
+	_, err := d.PG.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf(
+			"delete expired sessions: %w",
+			err,
+		)
+	}
+
+	return nil
 }

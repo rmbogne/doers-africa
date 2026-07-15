@@ -19,11 +19,36 @@
                 <li><a href="/">Home</a></li>
                 <li><a href="/prospects">Explore</a></li>
                 {{if eq .Role "doer"}}
-                    <li><a href="/doer/dashboard">Doer Dashboard</a></li>
-                    <li><a href="/logout">Logout</a></li>
+                    <a href="/doer/dashboard">Dashboard</a>
+
+                    <form
+                        action="/logout"
+                        method="POST"
+                        class="logout-form"
+                    >
+                        <button
+                            type="submit"
+                            class="logout-button"
+                        >
+                            Logout
+                        </button>
+                    </form>
+
                 {{else if eq .Role "customer"}}
-                    <li><a href="/customer/dashboard">My RSVPs</a></li>
-                    <li><a href="/logout">Logout</a></li>
+                    <a href="/customer/dashboard">Dashboard</a>
+
+                    <form
+                        action="/logout"
+                        method="POST"
+                        class="logout-form"
+                    >
+                        <button
+                            type="submit"
+                            class="logout-button"
+                        >
+                            Logout
+                        </button>
+                    </form>
                 {{else}}
                     <li><a href="/login">Login</a></li>
                     <li><a href="/register">Register</a></li>

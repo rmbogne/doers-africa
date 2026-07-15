@@ -94,3 +94,67 @@ func EventDetailHandler(w http.ResponseWriter, r *http.Request) {
 		HasRSVPd: hasRSVPd,
 	})
 }
+
+func ServiceDetailHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
+	serviceID := strings.TrimPrefix(
+		r.URL.Path,
+		"/service/",
+	)
+	serviceID = strings.TrimSpace(serviceID)
+
+	if serviceID == "" {
+		http.Error(
+			w,
+			"Missing service ID",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	service, found := store.DB.GetService(serviceID)
+	if !found {
+		http.Error(
+			w,
+			"Service not found",
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	doer, found := store.DB.GetDoer(service.DoerID)
+	if !found {
+		http.Error(
+			w,
+			"Service provider not found",
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	role, _ := middleware.GetRoleAndID(r)
+
+	render(
+		w,
+		r,
+		"service_detail.html",
+		PageData{
+			Role:     role,
+			Service:  service,
+			Doer:     doer,
+			DoerName: doer.Name,
+		},
+	)
+}

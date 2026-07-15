@@ -14,6 +14,7 @@ import (
 	"time"
 
 	passwordutil "github.com/mbogne/african-doers/internal/password"
+	sessionutil "github.com/mbogne/african-doers/internal/session"
 	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
@@ -21,6 +22,7 @@ import (
 const (
 	registrationFormMemory = 10 << 20
 	registrationBodyLimit  = 12 << 20
+	sessionCookieName      = "session"
 	sessionDuration        = 24 * time.Hour
 )
 
@@ -55,16 +57,56 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	case "doer":
 		doer, err := store.DB.GetDoerByEmail(r.Context(), email)
 		if err == nil && passwordutil.Matches(doer.PasswordHash, plainTextPassword) {
-			setCookie(w, r, "doer", doer.ID)
-			http.Redirect(w, r, "/doer/dashboard", http.StatusSeeOther)
+			if err := createSession(
+				w,
+				r,
+				"doer",
+				doer.ID,
+			); err != nil {
+				log.Printf("Create doer session error: %v", err)
+
+				http.Error(
+					w,
+					"Unable to create login session",
+					http.StatusInternalServerError,
+				)
+				return
+			}
+
+			http.Redirect(
+				w,
+				r,
+				"/doer/dashboard",
+				http.StatusSeeOther,
+			)
 			return
 		}
 
 	case "customer":
 		customer, err := store.DB.GetCustomerByEmail(r.Context(), email)
 		if err == nil && passwordutil.Matches(customer.PasswordHash, plainTextPassword) {
-			setCookie(w, r, "customer", customer.ID)
-			http.Redirect(w, r, "/customer/dashboard", http.StatusSeeOther)
+			if err := createSession(
+				w,
+				r,
+				"customer",
+				customer.ID,
+			); err != nil {
+				log.Printf("Create customer session error: %v", err)
+
+				http.Error(
+					w,
+					"Unable to create login session",
+					http.StatusInternalServerError,
+				)
+				return
+			}
+
+			http.Redirect(
+				w,
+				r,
+				"/customer/dashboard",
+				http.StatusSeeOther,
+			)
 			return
 		}
 
@@ -184,33 +226,96 @@ func registerDoer(r *http.Request, name, email, passwordHash string) error {
 	return store.DB.RegisterDoer(r.Context(), doer)
 }
 
-func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+func LogoutHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil && cookie.Value != "" {
+		tokenHash := sessionutil.Hash(cookie.Value)
+
+		if err := store.DB.DeleteSession(
+			r.Context(),
+			tokenHash,
+		); err != nil {
+			log.Printf("Delete session error: %v", err)
+		}
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
+		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
-		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   sessionCookieSecure(),
 		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 	})
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(
+		w,
+		r,
+		"/",
+		http.StatusSeeOther,
+	)
 }
 
-func setCookie(w http.ResponseWriter, r *http.Request, role string, id int) {
-	value := fmt.Sprintf("%s:%d", role, id)
+func createSession(
+	w http.ResponseWriter,
+	r *http.Request,
+	role string,
+	userID int,
+) error {
+	rawToken, tokenHash, err := sessionutil.NewToken()
+	if err != nil {
+		return err
+	}
+
+	expiresAt := time.Now().
+		UTC().
+		Add(sessionDuration)
+
+	err = store.DB.CreateSession(
+		r.Context(),
+		tokenHash,
+		role,
+		userID,
+		expiresAt,
+	)
+	if err != nil {
+		return err
+	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    value,
+		Name:     sessionCookieName,
+		Value:    rawToken,
 		Path:     "/",
-		Expires:  time.Now().Add(sessionDuration),
-		MaxAge:   int(sessionDuration.Seconds()),
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   sessionCookieSecure(),
 		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt,
+		MaxAge:   int(sessionDuration.Seconds()),
 	})
+
+	return nil
+}
+
+func sessionCookieSecure() bool {
+	return strings.EqualFold(
+		os.Getenv("SESSION_COOKIE_SECURE"),
+		"true",
+	)
 }
 
 func normalizeEmail(value string) string {

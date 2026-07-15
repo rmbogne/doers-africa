@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	minimumPasswordLength = 12
+	minimumPasswordLength = 8
 	maximumPasswordBytes  = 72
 )
 
