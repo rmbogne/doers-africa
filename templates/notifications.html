@@ -1,0 +1,170 @@
+{{define "content"}}
+<section style="max-width: 900px; margin: 0 auto;">
+    <header
+        style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        "
+    >
+        <div>
+            <h1 style="font-size: 2.25rem; margin: 0 0 0.5rem;">
+                Notifications
+            </h1>
+
+            <p style="margin: 0; color: var(--text-muted);">
+                {{if gt .UnreadCount 0}}
+                    You have {{.UnreadCount}} unread notification(s).
+                {{else}}
+                    You have no unread notifications.
+                {{end}}
+            </p>
+        </div>
+
+        {{if gt .UnreadCount 0}}
+            <form
+                action="/notifications/read-all"
+                method="POST"
+                style="margin: 0;"
+            >
+                <button
+                    type="submit"
+                    class="btn btn-secondary"
+                >
+                    Mark All Read
+                </button>
+            </form>
+        {{end}}
+    </header>
+
+    {{if .Notifications}}
+        <div style="display: grid; gap: 1rem;">
+            {{range .Notifications}}
+                <article
+                    style="
+                        background:
+                            {{if .IsRead}}
+                                var(--bg-card)
+                            {{else}}
+                                rgba(59,130,246,0.10)
+                            {{end}};
+                        border:
+                            1px solid
+                            {{if .IsRead}}
+                                rgba(255,255,255,0.1)
+                            {{else}}
+                                rgba(59,130,246,0.40)
+                            {{end}};
+                        border-radius: 1rem;
+                        padding: 1.35rem;
+                    "
+                >
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            gap: 1rem;
+                            flex-wrap: wrap;
+                        "
+                    >
+                        <div style="flex: 1; min-width: 240px;">
+                            <div
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 0.6rem;
+                                    flex-wrap: wrap;
+                                    margin-bottom: 0.5rem;
+                                "
+                            >
+                                <h2
+                                    style="
+                                        font-size: 1.1rem;
+                                        margin: 0;
+                                    "
+                                >
+                                    {{.Title}}
+                                </h2>
+
+                                {{if not .IsRead}}
+                                    <span
+                                        style="
+                                            background: var(--accent);
+                                            color: #000;
+                                            border-radius: 9999px;
+                                            padding: 0.2rem 0.55rem;
+                                            font-size: 0.72rem;
+                                            font-weight: 700;
+                                        "
+                                    >
+                                        New
+                                    </span>
+                                {{end}}
+                            </div>
+
+                            <p
+                                style="
+                                    margin: 0 0 0.75rem;
+                                    line-height: 1.6;
+                                "
+                            >
+                                {{.Message}}
+                            </p>
+
+                            <time
+                                style="
+                                    color: var(--text-muted);
+                                    font-size: 0.85rem;
+                                "
+                            >
+                                {{.CreatedAt.Format "Jan 02, 2006 3:04 PM"}}
+                            </time>
+                        </div>
+
+                        <form
+                            action="/notifications/open"
+                            method="POST"
+                            style="margin: 0;"
+                        >
+                            <input
+                                type="hidden"
+                                name="notification_id"
+                                value="{{.ID}}"
+                            >
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                            >
+                                {{if .IsRead}}Open{{else}}Open and Mark Read{{end}}
+                            </button>
+                        </form>
+                    </div>
+                </article>
+            {{end}}
+        </div>
+    {{else}}
+        <div
+            style="
+                background: var(--bg-card);
+                border: 1px dashed rgba(255,255,255,0.18);
+                border-radius: 1rem;
+                padding: 2.5rem;
+                text-align: center;
+            "
+        >
+            <h2 style="margin-top: 0;">
+                No notifications
+            </h2>
+
+            <p style="color: var(--text-muted); margin-bottom: 0;">
+                New service-request and RSVP activity will appear here.
+            </p>
+        </div>
+    {{end}}
+</section>
+{{end}}

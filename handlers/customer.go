@@ -51,7 +51,9 @@ func CustomerDashboardHandler(
 		r,
 		"customer_dashboard.html",
 		PageData{
-			Events:          store.DB.GetCustomerRSVPs(customerID),
+			Events: store.DB.GetCustomerRSVPs(
+				customerID,
+			),
 			ServiceRequests: serviceRequests,
 		},
 	)
@@ -93,7 +95,8 @@ func CustomerRSVPHandler(
 		return
 	}
 
-	if _, found := store.DB.GetEvent(eventID); !found {
+	event, found := store.DB.GetEvent(eventID)
+	if !found {
 		http.Error(
 			w,
 			"Event not found",
@@ -102,10 +105,20 @@ func CustomerRSVPHandler(
 		return
 	}
 
-	store.DB.RecordRSVP(
+	if _, err := store.DB.RecordRSVP(
+		r.Context(),
 		eventID,
+		event,
 		customerID,
-	)
+	); err != nil {
+		log.Printf("RecordRSVP error: %v", err)
+		http.Error(
+			w,
+			"Unable to record RSVP",
+			http.StatusInternalServerError,
+		)
+		return
+	}
 
 	http.Redirect(
 		w,

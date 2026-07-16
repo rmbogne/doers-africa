@@ -1,8 +1,11 @@
 package store
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/mbogne/african-doers/models"
 )
@@ -37,25 +40,124 @@ func setupEventRSVPSchema() error {
 }
 
 func (d *Database) RecordRSVP(
+	ctx context.Context,
 	eventID string,
+	event models.Event,
 	customerID int,
-) {
-	const query = `
-		INSERT INTO rsvps (
-			event_id,
-			customer_id
-		)
-		VALUES ($1, $2)
-		ON CONFLICT (event_id, customer_id) DO NOTHING
-	`
+) (bool, error) {
+	eventID = strings.TrimSpace(eventID)
 
-	if _, err := d.PG.Exec(
-		query,
+	if eventID == "" ||
+		event.DoerID <= 0 ||
+		customerID <= 0 {
+		return false, fmt.Errorf(
+			"invalid event RSVP",
+		)
+	}
+
+	transaction, err := d.PG.BeginTx(
+		ctx,
+		&sql.TxOptions{
+			Isolation: sql.LevelReadCommitted,
+		},
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"begin event RSVP: %w",
+			err,
+		)
+	}
+	defer transaction.Rollback()
+
+	var customerName string
+
+	if err := transaction.QueryRowContext(
+		ctx,
+		`
+			SELECT name
+			FROM customers
+			WHERE id = $1
+		`,
+		customerID,
+	).Scan(&customerName); err != nil {
+		return false, fmt.Errorf(
+			"load RSVP customer: %w",
+			err,
+		)
+	}
+
+	result, err := transaction.ExecContext(
+		ctx,
+		`
+			INSERT INTO rsvps (
+				event_id,
+				customer_id
+			)
+			VALUES ($1, $2)
+			ON CONFLICT (
+				event_id,
+				customer_id
+			)
+			DO NOTHING
+		`,
 		eventID,
 		customerID,
-	); err != nil {
-		log.Printf("RecordRSVP error: %v", err)
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"record event RSVP: %w",
+			err,
+		)
 	}
+
+	affectedRows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf(
+			"read event RSVP result: %w",
+			err,
+		)
+	}
+
+	if affectedRows == 0 {
+		if err := transaction.Commit(); err != nil {
+			return false, fmt.Errorf(
+				"commit existing event RSVP: %w",
+				err,
+			)
+		}
+
+		return false, nil
+	}
+
+	if err := insertNotification(
+		ctx,
+		transaction,
+		models.Notification{
+			RecipientRole: models.NotificationRecipientDoer,
+			RecipientID:   event.DoerID,
+			Type:          models.NotificationTypeEventRSVPCreated,
+			Title:         "New event RSVP",
+			Message: fmt.Sprintf(
+				"%s RSVP'd to %q.",
+				customerName,
+				event.Title,
+			),
+			ActionURL:     "/event/" + eventID,
+			ReferenceType: models.NotificationReferenceEvent,
+			ReferenceID:   eventID,
+		},
+	); err != nil {
+		return false, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		return false, fmt.Errorf(
+			"commit event RSVP: %w",
+			err,
+		)
+	}
+
+	return true, nil
 }
 
 func (d *Database) GetCustomerRSVPs(

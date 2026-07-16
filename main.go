@@ -215,6 +215,23 @@ func main() {
 		handlers.ServiceRequestHistoryHandler,
 	)
 
+	// ----------------- SERVICE NOTIFICATIONS ROUTES -----------------
+
+	mux.HandleFunc(
+		"/notifications",
+		handlers.NotificationsHandler,
+	)
+
+	mux.HandleFunc(
+		"/notifications/open",
+		handlers.NotificationOpenHandler,
+	)
+
+	mux.HandleFunc(
+		"/notifications/read-all",
+		handlers.MarkAllNotificationsReadHandler,
+	)
+
 	// Auth must execute before RequireRole.
 	handler := middleware.Logger(
 		middleware.Auth(mux),

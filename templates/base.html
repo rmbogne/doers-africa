@@ -20,6 +20,7 @@
                 <li><a href="/prospects">Explore</a></li>
                 {{if eq .Role "doer"}}
                     <a href="/doer/dashboard">Dashboard</a>
+                    <a href="/notifications">Notifications</a>
 
                     <form
                         action="/logout"
@@ -36,6 +37,7 @@
 
                 {{else if eq .Role "customer"}}
                     <a href="/customer/dashboard">Dashboard</a>
+                    <a href="/notifications">Notifications</a>
 
                     <form
                         action="/logout"

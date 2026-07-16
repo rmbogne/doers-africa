@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/lib/pq"
 	"github.com/mbogne/african-doers/models"
 )
 
 var (
+	// ErrActiveServiceRequestExists is retained for compatibility with older
+	// handlers. CreateServiceRequest no longer returns this error because a
+	// customer may submit multiple requests for the same service.
 	ErrActiveServiceRequestExists = errors.New(
 		"an active request already exists for this service",
 	)
@@ -81,9 +84,17 @@ func setupServiceRequestSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_service_requests_status
 			ON service_requests (status);
 
-		CREATE UNIQUE INDEX IF NOT EXISTS ux_service_requests_active
-			ON service_requests (customer_id, service_id)
-			WHERE status IN ('pending', 'accepted');
+		-- Older versions prevented a customer from having more than one
+		-- pending or accepted request for the same service. Remove that
+		-- restriction so each occasion can be submitted independently.
+		DROP INDEX IF EXISTS ux_service_requests_active;
+
+		CREATE INDEX IF NOT EXISTS idx_service_requests_customer_service
+			ON service_requests (
+				customer_id,
+				service_id,
+				created_at DESC
+			);
 
 		CREATE TABLE IF NOT EXISTS service_request_status_history (
 			id BIGSERIAL PRIMARY KEY,
@@ -205,6 +216,20 @@ func (d *Database) CreateServiceRequest(
 	ctx context.Context,
 	request models.ServiceRequest,
 ) (int64, error) {
+	transaction, err := d.PG.BeginTx(
+		ctx,
+		&sql.TxOptions{
+			Isolation: sql.LevelReadCommitted,
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"begin service request creation: %w",
+			err,
+		)
+	}
+	defer transaction.Rollback()
+
 	const query = `
 		INSERT INTO service_requests (
 			service_id,
@@ -225,7 +250,7 @@ func (d *Database) CreateServiceRequest(
 
 	var requestID int64
 
-	err := d.PG.QueryRowContext(
+	err = transaction.QueryRowContext(
 		ctx,
 		query,
 		request.ServiceID,
@@ -239,15 +264,42 @@ func (d *Database) CreateServiceRequest(
 	).Scan(&requestID)
 
 	if err != nil {
-		var pqError *pq.Error
-
-		if errors.As(err, &pqError) &&
-			pqError.Code == "23505" {
-			return 0, ErrActiveServiceRequestExists
-		}
-
 		return 0, fmt.Errorf(
 			"create service request: %w",
+			err,
+		)
+	}
+
+	requestIDText := strconv.FormatInt(
+		requestID,
+		10,
+	)
+
+	err = insertNotification(
+		ctx,
+		transaction,
+		models.Notification{
+			RecipientRole: models.NotificationRecipientDoer,
+			RecipientID:   request.DoerID,
+			Type:          models.NotificationTypeServiceRequestCreated,
+			Title:         "New service request",
+			Message: fmt.Sprintf(
+				"A customer requested %q.",
+				request.ServiceTitle,
+			),
+			ActionURL: "/service-request/history?id=" +
+				requestIDText,
+			ReferenceType: models.NotificationReferenceServiceRequest,
+			ReferenceID:   requestIDText,
+		},
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		return 0, fmt.Errorf(
+			"commit service request creation: %w",
 			err,
 		)
 	}
@@ -433,11 +485,16 @@ func (d *Database) UpdateServiceRequestStatus(
 	defer transaction.Rollback()
 
 	var currentStatus string
+	var customerID int
+	var serviceTitle string
 
 	err = transaction.QueryRowContext(
 		ctx,
 		`
-			SELECT status
+			SELECT
+				status,
+				customer_id,
+				service_title
 			FROM service_requests
 			WHERE id = $1
 			  AND doer_id = $2
@@ -445,7 +502,11 @@ func (d *Database) UpdateServiceRequestStatus(
 		`,
 		requestID,
 		doerID,
-	).Scan(&currentStatus)
+	).Scan(
+		&currentStatus,
+		&customerID,
+		&serviceTitle,
+	)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrServiceRequestNotFound
@@ -511,6 +572,23 @@ func (d *Database) UpdateServiceRequestStatus(
 		return err
 	}
 
+	notification :=
+		serviceRequestStatusNotification(
+			customerID,
+			requestID,
+			serviceTitle,
+			nextStatus,
+			doerResponse,
+		)
+
+	if err := insertNotification(
+		ctx,
+		transaction,
+		notification,
+	); err != nil {
+		return err
+	}
+
 	if err := transaction.Commit(); err != nil {
 		return fmt.Errorf(
 			"commit service request update: %w",
@@ -541,11 +619,16 @@ func (d *Database) CancelServiceRequest(
 	defer transaction.Rollback()
 
 	var currentStatus string
+	var doerID int
+	var serviceTitle string
 
 	err = transaction.QueryRowContext(
 		ctx,
 		`
-			SELECT status
+			SELECT
+				status,
+				doer_id,
+				service_title
 			FROM service_requests
 			WHERE id = $1
 			  AND customer_id = $2
@@ -553,7 +636,11 @@ func (d *Database) CancelServiceRequest(
 		`,
 		requestID,
 		customerID,
-	).Scan(&currentStatus)
+	).Scan(
+		&currentStatus,
+		&doerID,
+		&serviceTitle,
+	)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrServiceRequestNotFound
@@ -599,6 +686,32 @@ func (d *Database) CancelServiceRequest(
 		"customer",
 		customerID,
 		"Cancelled by customer",
+	); err != nil {
+		return err
+	}
+
+	requestIDText := strconv.FormatInt(
+		requestID,
+		10,
+	)
+
+	if err := insertNotification(
+		ctx,
+		transaction,
+		models.Notification{
+			RecipientRole: models.NotificationRecipientDoer,
+			RecipientID:   doerID,
+			Type:          models.NotificationTypeServiceRequestCancelled,
+			Title:         "Service request cancelled",
+			Message: fmt.Sprintf(
+				"The customer cancelled the request for %q.",
+				serviceTitle,
+			),
+			ActionURL: "/service-request/history?id=" +
+				requestIDText,
+			ReferenceType: models.NotificationReferenceServiceRequest,
+			ReferenceID:   requestIDText,
+		},
 	); err != nil {
 		return err
 	}
@@ -778,6 +891,67 @@ func scanServiceRequest(
 	)
 
 	return request, err
+}
+
+func serviceRequestStatusNotification(
+	customerID int,
+	requestID int64,
+	serviceTitle string,
+	nextStatus string,
+	doerResponse string,
+) models.Notification {
+	requestIDText := strconv.FormatInt(
+		requestID,
+		10,
+	)
+
+	notification := models.Notification{
+		RecipientRole: models.NotificationRecipientCustomer,
+		RecipientID:   customerID,
+		ActionURL: "/service-request/history?id=" +
+			requestIDText,
+		ReferenceType: models.NotificationReferenceServiceRequest,
+		ReferenceID:   requestIDText,
+	}
+
+	switch nextStatus {
+	case models.ServiceRequestStatusAccepted:
+		notification.Type =
+			models.NotificationTypeServiceRequestAccepted
+		notification.Title =
+			"Service request accepted"
+		notification.Message = fmt.Sprintf(
+			"Your request for %q was accepted.",
+			serviceTitle,
+		)
+
+	case models.ServiceRequestStatusRejected:
+		notification.Type =
+			models.NotificationTypeServiceRequestRejected
+		notification.Title =
+			"Service request rejected"
+		notification.Message = fmt.Sprintf(
+			"Your request for %q was rejected.",
+			serviceTitle,
+		)
+
+	case models.ServiceRequestStatusCompleted:
+		notification.Type =
+			models.NotificationTypeServiceRequestCompleted
+		notification.Title =
+			"Service request completed"
+		notification.Message = fmt.Sprintf(
+			"Your request for %q was marked completed.",
+			serviceTitle,
+		)
+	}
+
+	if strings.TrimSpace(doerResponse) != "" {
+		notification.Message += " Provider message: " +
+			strings.TrimSpace(doerResponse)
+	}
+
+	return notification
 }
 
 func validDoerStatusTransition(

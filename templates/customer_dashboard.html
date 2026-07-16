@@ -1,63 +1,218 @@
 {{define "content"}}
-<section style="max-width: 1100px; margin: 0 auto;">
-    <header style="margin-bottom: 2.5rem;">
-        <h1 style="font-size: 2.25rem; margin-bottom: 0.5rem;">
-            Customer Dashboard
-        </h1>
-        <p style="color: var(--text-muted); margin: 0;">
-            Review your service requests and event RSVPs.
-        </p>
+<style>
+    .dashboard-shell {
+        max-width: 1180px;
+        margin: 0 auto;
+    }
+
+    .dashboard-header,
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .dashboard-header {
+        margin-bottom: 2.5rem;
+    }
+
+    .section-header {
+        margin-bottom: 1.25rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .request-carousel {
+        display: flex;
+        gap: 1rem;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        scroll-snap-type: x mandatory;
+        padding: 0.25rem 0.1rem 1rem;
+        scrollbar-width: thin;
+    }
+
+    .request-carousel-card {
+        flex: 0 0 min(390px, 88vw);
+        scroll-snap-align: start;
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+        padding: 1.35rem;
+    }
+
+    .request-status {
+        display: inline-block;
+        padding: 0.35rem 0.7rem;
+        border-radius: 9999px;
+        background: rgba(255,255,255,0.08);
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: capitalize;
+        white-space: nowrap;
+    }
+
+    .request-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin: 1rem 0;
+    }
+
+    .request-metric {
+        background: rgba(255,255,255,0.04);
+        border-radius: 0.6rem;
+        padding: 0.8rem;
+    }
+
+    .request-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .carousel-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .carousel-control {
+        min-width: 42px;
+        min-height: 42px;
+        border-radius: 9999px;
+        cursor: pointer;
+    }
+
+    .request-table-wrapper {
+        overflow-x: auto;
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+    }
+
+    .request-table {
+        width: 100%;
+        min-width: 1120px;
+        border-collapse: collapse;
+    }
+
+    .request-table th,
+    .request-table td {
+        padding: 0.9rem 1rem;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .request-table th {
+        background: rgba(255,255,255,0.05);
+        white-space: nowrap;
+    }
+
+    .request-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .empty-panel {
+        background: var(--bg-card);
+        border: 1px dashed rgba(255,255,255,0.18);
+        border-radius: 1rem;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .event-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .event-card {
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+        padding: 1.5rem;
+    }
+
+    @media (max-width: 680px) {
+        .request-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<section class="dashboard-shell">
+    <header class="dashboard-header">
+        <div>
+            <h1 style="font-size: 2.25rem; margin: 0 0 0.5rem;">
+                Customer Dashboard
+            </h1>
+            <p style="color: var(--text-muted); margin: 0;">
+                Track open service requests and review your complete request history.
+            </p>
+        </div>
+
+        <a href="/prospects" class="btn btn-primary">
+            Find Services
+        </a>
     </header>
 
-    <section style="margin-bottom: 4rem;">
-        <div
-            style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 1rem;
-                margin-bottom: 1.25rem;
-                padding-bottom: 1rem;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-            "
-        >
+    <section id="customer-open-requests" style="margin-bottom: 4rem;">
+        <div class="section-header">
             <div>
-                <h2 style="margin: 0;">My Service Requests</h2>
+                <h2 style="margin: 0;">Open Service Requests</h2>
                 <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                    Track services requested from providers.
+                    Pending and accepted requests requiring additional activity.
                 </p>
             </div>
 
-            <a href="/prospects" class="btn btn-primary">
-                Find Services
-            </a>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <a href="#customer-service-request-table">
+                    View complete request list
+                </a>
+
+                <div class="carousel-controls">
+                    <button
+                        type="button"
+                        class="btn btn-secondary carousel-control"
+                        aria-label="Scroll requests left"
+                        onclick="document.getElementById('customer-request-carousel').scrollBy({left: -410, behavior: 'smooth'});"
+                    >
+                        &#8592;
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-secondary carousel-control"
+                        aria-label="Scroll requests right"
+                        onclick="document.getElementById('customer-request-carousel').scrollBy({left: 410, behavior: 'smooth'});"
+                    >
+                        &#8594;
+                    </button>
+                </div>
+            </div>
         </div>
 
-        {{if .ServiceRequests}}
-            <div
-                style="
-                    display: grid;
-                    grid-template-columns:
-                        repeat(auto-fit, minmax(320px, 1fr));
-                    gap: 1.25rem;
-                "
-            >
-                {{range .ServiceRequests}}
-                    <article
-                        style="
-                            background: var(--bg-card);
-                            border: 1px solid rgba(255,255,255,0.1);
-                            border-radius: 1rem;
-                            padding: 1.5rem;
-                        "
-                    >
+        {{$hasOpenRequests := false}}
+
+        <div id="customer-request-carousel" class="request-carousel">
+            {{range .ServiceRequests}}
+                {{if or (eq .Status "pending") (eq .Status "accepted")}}
+                    {{$hasOpenRequests = true}}
+
+                    <article class="request-carousel-card">
                         <div
                             style="
                                 display: flex;
                                 justify-content: space-between;
                                 align-items: flex-start;
                                 gap: 1rem;
-                                margin-bottom: 1rem;
                             "
                         >
                             <div>
@@ -65,42 +220,17 @@
                                     {{.ServiceTitle}}
                                 </h3>
                                 <p style="margin: 0; color: var(--text-muted);">
-                                    Provider:
-                                    <strong>{{.DoerName}}</strong>
+                                    Provider: <strong>{{.DoerName}}</strong>
                                 </p>
                             </div>
 
-                            <span
-                                style="
-                                    display: inline-block;
-                                    padding: 0.35rem 0.7rem;
-                                    border-radius: 9999px;
-                                    background: rgba(255,255,255,0.08);
-                                    font-size: 0.8rem;
-                                    font-weight: 700;
-                                    text-transform: capitalize;
-                                    white-space: nowrap;
-                                "
-                            >
+                            <span class="request-status">
                                 {{.Status}}
                             </span>
                         </div>
 
-                        <div
-                            style="
-                                display: grid;
-                                grid-template-columns: 1fr 1fr;
-                                gap: 0.75rem;
-                                margin-bottom: 1rem;
-                            "
-                        >
-                            <div
-                                style="
-                                    background: rgba(255,255,255,0.04);
-                                    border-radius: 0.6rem;
-                                    padding: 0.8rem;
-                                "
-                            >
+                        <div class="request-metrics">
+                            <div class="request-metric">
                                 <small style="color: var(--text-muted);">
                                     Requested date
                                 </small>
@@ -111,13 +241,7 @@
                                 </div>
                             </div>
 
-                            <div
-                                style="
-                                    background: rgba(255,255,255,0.04);
-                                    border-radius: 0.6rem;
-                                    padding: 0.8rem;
-                                "
-                            >
+                            <div class="request-metric">
                                 <small style="color: var(--text-muted);">
                                     Price
                                 </small>
@@ -127,17 +251,11 @@
                             </div>
                         </div>
 
-                        <div style="margin-bottom: 1rem;">
+                        <div>
                             <small style="color: var(--text-muted);">
                                 Your request
                             </small>
-                            <p
-                                style="
-                                    margin: 0.35rem 0 0;
-                                    line-height: 1.6;
-                                    overflow-wrap: anywhere;
-                                "
-                            >
+                            <p style="margin: 0.35rem 0 0; line-height: 1.6;">
                                 {{.Message}}
                             </p>
                         </div>
@@ -145,43 +263,23 @@
                         {{if .DoerResponse}}
                             <div
                                 style="
-                                    background: rgba(255,255,255,0.05);
-                                    border-left: 3px solid var(--accent);
-                                    border-radius: 0.4rem;
+                                    margin-top: 1rem;
                                     padding: 0.9rem 1rem;
-                                    margin-bottom: 1rem;
+                                    border-left: 3px solid var(--accent);
+                                    background: rgba(255,255,255,0.05);
+                                    border-radius: 0.4rem;
                                 "
                             >
                                 <small style="color: var(--text-muted);">
                                     Provider response
                                 </small>
-                                <p style="margin: 0.35rem 0 0; line-height: 1.6;">
+                                <p style="margin: 0.35rem 0 0;">
                                     {{.DoerResponse}}
                                 </p>
                             </div>
                         {{end}}
 
-                        <p
-                            style="
-                                margin: 0 0 1rem;
-                                color: var(--text-muted);
-                                font-size: 0.85rem;
-                            "
-                        >
-                            Submitted
-                            {{.CreatedAt.Format "Jan 02, 2006 3:04 PM"}}
-                        </p>
-
-                        <div
-                            style="
-                                display: flex;
-                                align-items: center;
-                                gap: 0.75rem;
-                                flex-wrap: wrap;
-                                padding-top: 1rem;
-                                border-top: 1px solid rgba(255,255,255,0.08);
-                            "
-                        >
+                        <div class="request-actions">
                             <a
                                 href="/service/{{.ServiceID}}"
                                 class="btn btn-secondary"
@@ -213,27 +311,21 @@
                                         type="submit"
                                         class="btn btn-secondary"
                                     >
-                                        Cancel Request
+                                        Cancel
                                     </button>
                                 </form>
                             {{end}}
                         </div>
                     </article>
                 {{end}}
-            </div>
-        {{else}}
-            <div
-                style="
-                    background: var(--bg-card);
-                    border: 1px dashed rgba(255,255,255,0.18);
-                    border-radius: 1rem;
-                    padding: 2rem;
-                    text-align: center;
-                "
-            >
-                <h3 style="margin-top: 0;">No service requests yet</h3>
+            {{end}}
+        </div>
+
+        {{if not $hasOpenRequests}}
+            <div class="empty-panel">
+                <h3 style="margin-top: 0;">No open service requests</h3>
                 <p style="color: var(--text-muted);">
-                    Services you request will appear here.
+                    New pending or accepted requests will appear in this carousel.
                 </p>
                 <a href="/prospects" class="btn btn-primary">
                     Browse Services
@@ -242,45 +334,114 @@
         {{end}}
     </section>
 
+    <section
+        id="customer-service-request-table"
+        style="margin-bottom: 4rem; scroll-margin-top: 1rem;"
+    >
+        <div class="section-header">
+            <div>
+                <h2 style="margin: 0;">Complete Service Request List</h2>
+                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                    All pending, accepted, rejected, cancelled, and completed requests.
+                </p>
+            </div>
+
+            <a href="#customer-open-requests">
+                Back to open requests
+            </a>
+        </div>
+
+        {{if .ServiceRequests}}
+            <div class="request-table-wrapper">
+                <table class="request-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Service</th>
+                            <th>Provider</th>
+                            <th>Requested Date</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th>Request</th>
+                            <th>Provider Response</th>
+                            <th>Submitted</th>
+                            <th>History</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .ServiceRequests}}
+                            <tr>
+                                <td>#{{.ID}}</td>
+                                <td>
+                                    <a href="/service/{{.ServiceID}}">
+                                        {{.ServiceTitle}}
+                                    </a>
+                                </td>
+                                <td>{{.DoerName}}</td>
+                                <td>
+                                    {{.RequestedDate.Format "Jan 02, 2006"}}
+                                </td>
+                                <td>${{.ServicePrice}}</td>
+                                <td>
+                                    <span class="request-status">
+                                        {{.Status}}
+                                    </span>
+                                </td>
+                                <td style="max-width: 260px;">
+                                    {{.Message}}
+                                </td>
+                                <td style="max-width: 260px;">
+                                    {{if .DoerResponse}}
+                                        {{.DoerResponse}}
+                                    {{else}}
+                                        —
+                                    {{end}}
+                                </td>
+                                <td>
+                                    {{.CreatedAt.Format "Jan 02, 2006 3:04 PM"}}
+                                </td>
+                                <td>
+                                    <a
+                                        href="/service-request/history?id={{.ID}}"
+                                    >
+                                        View
+                                    </a>
+                                </td>
+                            </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        {{else}}
+            <div class="empty-panel">
+                <p style="margin: 0;">
+                    You have not submitted any service requests.
+                </p>
+            </div>
+        {{end}}
+    </section>
+
     <section>
-        <div
-            style="
-                margin-bottom: 1.25rem;
-                padding-bottom: 1rem;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-            "
-        >
-            <h2 style="margin: 0;">My Event RSVPs</h2>
-            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                Events you plan to attend.
-            </p>
+        <div class="section-header">
+            <div>
+                <h2 style="margin: 0;">My Event RSVPs</h2>
+                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                    Events you plan to attend.
+                </p>
+            </div>
         </div>
 
         {{if .Events}}
-            <div
-                style="
-                    display: grid;
-                    grid-template-columns:
-                        repeat(auto-fit, minmax(280px, 1fr));
-                    gap: 1.25rem;
-                "
-            >
+            <div class="event-grid">
                 {{range .Events}}
-                    <article
-                        style="
-                            background: var(--bg-card);
-                            border: 1px solid rgba(255,255,255,0.1);
-                            border-radius: 1rem;
-                            padding: 1.5rem;
-                        "
-                    >
+                    <article class="event-card">
                         <div
                             style="
                                 display: inline-block;
-                                background: rgba(255,255,255,0.08);
-                                border-radius: 0.5rem;
                                 padding: 0.45rem 0.7rem;
                                 margin-bottom: 1rem;
+                                border-radius: 0.5rem;
+                                background: rgba(255,255,255,0.08);
                                 font-weight: 700;
                             "
                         >
@@ -295,13 +456,7 @@
                             {{.Location}}
                         </p>
 
-                        <p
-                            style="
-                                color: var(--text-muted);
-                                line-height: 1.6;
-                                margin-bottom: 1.25rem;
-                            "
-                        >
+                        <p style="color: var(--text-muted); line-height: 1.6;">
                             {{.Description}}
                         </p>
 
@@ -315,22 +470,10 @@
                 {{end}}
             </div>
         {{else}}
-            <div
-                style="
-                    background: var(--bg-card);
-                    border: 1px dashed rgba(255,255,255,0.18);
-                    border-radius: 1rem;
-                    padding: 2rem;
-                    text-align: center;
-                "
-            >
-                <h3 style="margin-top: 0;">No event RSVPs yet</h3>
-                <p style="color: var(--text-muted);">
+            <div class="empty-panel">
+                <p style="margin: 0;">
                     Events you RSVP to will appear here.
                 </p>
-                <a href="/prospects" class="btn btn-primary">
-                    Browse Events
-                </a>
             </div>
         {{end}}
     </section>
