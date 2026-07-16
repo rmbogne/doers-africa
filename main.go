@@ -188,6 +188,33 @@ func main() {
 		),
 	)
 
+	// ----------------- SERVICE REQUESTS STATUS ROUTES -----------------
+
+	mux.Handle(
+		"/doer/service-request/status",
+		middleware.RequireRole(
+			"doer",
+			http.HandlerFunc(
+				handlers.DoerUpdateServiceRequestStatusHandler,
+			),
+		),
+	)
+
+	mux.Handle(
+		"/customer/service-request/cancel",
+		middleware.RequireRole(
+			"customer",
+			http.HandlerFunc(
+				handlers.CustomerCancelServiceRequestHandler,
+			),
+		),
+	)
+
+	mux.HandleFunc(
+		"/service-request/history",
+		handlers.ServiceRequestHistoryHandler,
+	)
+
 	// Auth must execute before RequireRole.
 	handler := middleware.Logger(
 		middleware.Auth(mux),

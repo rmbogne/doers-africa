@@ -1,102 +1,336 @@
 {{define "content"}}
 <section style="max-width: 1100px; margin: 0 auto;">
-    <div style="margin-bottom: 2.5rem;">
-        <h1 style="font-size: 2.25rem; margin-bottom: 0.5rem;">Customer Dashboard</h1>
-        <p style="color: var(--text-muted);">Review your event RSVPs and service requests.</p>
-    </div>
+    <header style="margin-bottom: 2.5rem;">
+        <h1 style="font-size: 2.25rem; margin-bottom: 0.5rem;">
+            Customer Dashboard
+        </h1>
+        <p style="color: var(--text-muted); margin: 0;">
+            Review your service requests and event RSVPs.
+        </p>
+    </header>
 
     <section style="margin-bottom: 4rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+        <div
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1rem;
+                margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            "
+        >
             <div>
                 <h2 style="margin: 0;">My Service Requests</h2>
-                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">Services you requested from providers.</p>
+                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                    Track services requested from providers.
+                </p>
             </div>
-            <a href="/prospects" class="btn btn-primary" style="white-space: nowrap;">Find Services</a>
+
+            <a href="/prospects" class="btn btn-primary">
+                Find Services
+            </a>
         </div>
 
         {{if .ServiceRequests}}
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(320px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
                 {{range .ServiceRequests}}
-                    <article style="background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; padding: 1.5rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem;">
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <div
+                            style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: flex-start;
+                                gap: 1rem;
+                                margin-bottom: 1rem;
+                            "
+                        >
                             <div>
-                                <h3 style="margin: 0 0 0.4rem;">{{.ServiceTitle}}</h3>
-                                <p style="margin: 0; color: var(--text-muted);">Provider: <strong>{{.DoerName}}</strong></p>
+                                <h3 style="margin: 0 0 0.4rem;">
+                                    {{.ServiceTitle}}
+                                </h3>
+                                <p style="margin: 0; color: var(--text-muted);">
+                                    Provider:
+                                    <strong>{{.DoerName}}</strong>
+                                </p>
                             </div>
 
-                            {{if eq .Status "pending"}}
-                                <span style="background: rgba(245,158,11,0.18); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); border-radius: 9999px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 700; text-transform: capitalize;">{{.Status}}</span>
-                            {{else if eq .Status "accepted"}}
-                                <span style="background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); border-radius: 9999px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 700; text-transform: capitalize;">{{.Status}}</span>
-                            {{else if eq .Status "completed"}}
-                                <span style="background: rgba(59,130,246,0.18); color: #60a5fa; border: 1px solid rgba(59,130,246,0.35); border-radius: 9999px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 700; text-transform: capitalize;">{{.Status}}</span>
-                            {{else}}
-                                <span style="background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.35); border-radius: 9999px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 700; text-transform: capitalize;">{{.Status}}</span>
-                            {{end}}
+                            <span
+                                style="
+                                    display: inline-block;
+                                    padding: 0.35rem 0.7rem;
+                                    border-radius: 9999px;
+                                    background: rgba(255,255,255,0.08);
+                                    font-size: 0.8rem;
+                                    font-weight: 700;
+                                    text-transform: capitalize;
+                                    white-space: nowrap;
+                                "
+                            >
+                                {{.Status}}
+                            </span>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
-                            <div style="background: rgba(255,255,255,0.04); padding: 0.8rem; border-radius: 0.6rem;">
-                                <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.25rem;">Requested date</div>
-                                <strong>{{.RequestedDate.Format "Jan 02, 2006"}}</strong>
+                        <div
+                            style="
+                                display: grid;
+                                grid-template-columns: 1fr 1fr;
+                                gap: 0.75rem;
+                                margin-bottom: 1rem;
+                            "
+                        >
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.04);
+                                    border-radius: 0.6rem;
+                                    padding: 0.8rem;
+                                "
+                            >
+                                <small style="color: var(--text-muted);">
+                                    Requested date
+                                </small>
+                                <div>
+                                    <strong>
+                                        {{.RequestedDate.Format "Jan 02, 2006"}}
+                                    </strong>
+                                </div>
                             </div>
-                            <div style="background: rgba(255,255,255,0.04); padding: 0.8rem; border-radius: 0.6rem;">
-                                <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.25rem;">Price</div>
-                                <strong>${{.ServicePrice}}</strong>
+
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.04);
+                                    border-radius: 0.6rem;
+                                    padding: 0.8rem;
+                                "
+                            >
+                                <small style="color: var(--text-muted);">
+                                    Price
+                                </small>
+                                <div>
+                                    <strong>${{.ServicePrice}}</strong>
+                                </div>
                             </div>
                         </div>
 
                         <div style="margin-bottom: 1rem;">
-                            <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem;">Your request</div>
-                            <p style="margin: 0; line-height: 1.6; overflow-wrap: anywhere;">{{.Message}}</p>
+                            <small style="color: var(--text-muted);">
+                                Your request
+                            </small>
+                            <p
+                                style="
+                                    margin: 0.35rem 0 0;
+                                    line-height: 1.6;
+                                    overflow-wrap: anywhere;
+                                "
+                            >
+                                {{.Message}}
+                            </p>
                         </div>
 
                         {{if .DoerResponse}}
-                            <div style="background: rgba(255,255,255,0.05); border-left: 3px solid var(--accent); padding: 0.9rem 1rem; margin-bottom: 1rem;">
-                                <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem;">Provider response</div>
-                                <p style="margin: 0; line-height: 1.6;">{{.DoerResponse}}</p>
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.05);
+                                    border-left: 3px solid var(--accent);
+                                    border-radius: 0.4rem;
+                                    padding: 0.9rem 1rem;
+                                    margin-bottom: 1rem;
+                                "
+                            >
+                                <small style="color: var(--text-muted);">
+                                    Provider response
+                                </small>
+                                <p style="margin: 0.35rem 0 0; line-height: 1.6;">
+                                    {{.DoerResponse}}
+                                </p>
                             </div>
                         {{end}}
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
-                            <small style="color: var(--text-muted);">Submitted {{.CreatedAt.Format "Jan 02, 2006"}}</small>
-                            <a href="/service/{{.ServiceID}}" class="btn btn-secondary">View Service</a>
+                        <p
+                            style="
+                                margin: 0 0 1rem;
+                                color: var(--text-muted);
+                                font-size: 0.85rem;
+                            "
+                        >
+                            Submitted
+                            {{.CreatedAt.Format "Jan 02, 2006 3:04 PM"}}
+                        </p>
+
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 0.75rem;
+                                flex-wrap: wrap;
+                                padding-top: 1rem;
+                                border-top: 1px solid rgba(255,255,255,0.08);
+                            "
+                        >
+                            <a
+                                href="/service/{{.ServiceID}}"
+                                class="btn btn-secondary"
+                            >
+                                View Service
+                            </a>
+
+                            <a
+                                href="/service-request/history?id={{.ID}}"
+                                class="btn btn-secondary"
+                            >
+                                View History
+                            </a>
+
+                            {{if eq .Status "pending"}}
+                                <form
+                                    action="/customer/service-request/cancel"
+                                    method="POST"
+                                    style="margin: 0;"
+                                    onsubmit="return confirm('Cancel this service request?');"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="request_id"
+                                        value="{{.ID}}"
+                                    >
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-secondary"
+                                    >
+                                        Cancel Request
+                                    </button>
+                                </form>
+                            {{end}}
                         </div>
                     </article>
                 {{end}}
             </div>
         {{else}}
-            <div style="background: var(--bg-card); border: 1px dashed rgba(255,255,255,0.18); border-radius: 1rem; padding: 2rem; text-align: center;">
+            <div
+                style="
+                    background: var(--bg-card);
+                    border: 1px dashed rgba(255,255,255,0.18);
+                    border-radius: 1rem;
+                    padding: 2rem;
+                    text-align: center;
+                "
+            >
                 <h3 style="margin-top: 0;">No service requests yet</h3>
-                <p style="color: var(--text-muted);">Services you request will appear here.</p>
-                <a href="/prospects" class="btn btn-primary">Browse Services</a>
+                <p style="color: var(--text-muted);">
+                    Services you request will appear here.
+                </p>
+                <a href="/prospects" class="btn btn-primary">
+                    Browse Services
+                </a>
             </div>
         {{end}}
     </section>
 
     <section>
-        <div style="margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+        <div
+            style="
+                margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            "
+        >
             <h2 style="margin: 0;">My Event RSVPs</h2>
-            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">Events you plan to attend.</p>
+            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                Events you plan to attend.
+            </p>
         </div>
 
         {{if .Events}}
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
                 {{range .Events}}
-                    <article style="background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; padding: 1.5rem;">
-                        <div style="display: inline-block; background: rgba(255,255,255,0.08); border-radius: 0.5rem; padding: 0.45rem 0.7rem; margin-bottom: 1rem; font-weight: 700;">{{.Date}}</div>
-                        <h3 style="margin: 0 0 0.6rem;">{{.Title}}</h3>
-                        <p style="color: var(--accent); margin: 0 0 0.75rem;">📍 {{.Location}}</p>
-                        <p style="color: var(--text-muted); line-height: 1.6; margin-bottom: 1.25rem;">{{.Description}}</p>
-                        <a href="/event/{{.ID.Hex}}" class="btn btn-secondary">View Event</a>
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <div
+                            style="
+                                display: inline-block;
+                                background: rgba(255,255,255,0.08);
+                                border-radius: 0.5rem;
+                                padding: 0.45rem 0.7rem;
+                                margin-bottom: 1rem;
+                                font-weight: 700;
+                            "
+                        >
+                            {{.Date}}
+                        </div>
+
+                        <h3 style="margin: 0 0 0.6rem;">
+                            {{.Title}}
+                        </h3>
+
+                        <p style="color: var(--accent); margin: 0 0 0.75rem;">
+                            {{.Location}}
+                        </p>
+
+                        <p
+                            style="
+                                color: var(--text-muted);
+                                line-height: 1.6;
+                                margin-bottom: 1.25rem;
+                            "
+                        >
+                            {{.Description}}
+                        </p>
+
+                        <a
+                            href="/event/{{.ID.Hex}}"
+                            class="btn btn-secondary"
+                        >
+                            View Event
+                        </a>
                     </article>
                 {{end}}
             </div>
         {{else}}
-            <div style="background: var(--bg-card); border: 1px dashed rgba(255,255,255,0.18); border-radius: 1rem; padding: 2rem; text-align: center;">
+            <div
+                style="
+                    background: var(--bg-card);
+                    border: 1px dashed rgba(255,255,255,0.18);
+                    border-radius: 1rem;
+                    padding: 2rem;
+                    text-align: center;
+                "
+            >
                 <h3 style="margin-top: 0;">No event RSVPs yet</h3>
-                <p style="color: var(--text-muted);">Events you RSVP to will appear here.</p>
-                <a href="/prospects" class="btn btn-primary">Browse Events</a>
+                <p style="color: var(--text-muted);">
+                    Events you RSVP to will appear here.
+                </p>
+                <a href="/prospects" class="btn btn-primary">
+                    Browse Events
+                </a>
             </div>
         {{end}}
     </section>

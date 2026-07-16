@@ -25,10 +25,12 @@ type PageData struct {
 	ServiceViews    []ServiceView
 	ServiceRequests []models.ServiceRequest
 	EventRSVPs      []models.EventRSVP
+	StatusHistory   []models.ServiceRequestStatusHistory
 
 	Event          models.Event
 	Service        models.Service
 	Doer           models.Doer
+	ServiceRequest models.ServiceRequest
 	DoerName       string
 	HasRSVPd       bool
 	RequestCreated bool

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,6 +24,10 @@ var (
 		"invalid service request status transition",
 	)
 )
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
 
 func setupServiceRequestSchema() error {
 	const query = `
@@ -62,6 +67,7 @@ func setupServiceRequestSchema() error {
 				),
 
 			doer_response TEXT NOT NULL DEFAULT '',
+
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
@@ -78,11 +84,116 @@ func setupServiceRequestSchema() error {
 		CREATE UNIQUE INDEX IF NOT EXISTS ux_service_requests_active
 			ON service_requests (customer_id, service_id)
 			WHERE status IN ('pending', 'accepted');
+
+		CREATE TABLE IF NOT EXISTS service_request_status_history (
+			id BIGSERIAL PRIMARY KEY,
+
+			service_request_id BIGINT NOT NULL
+				REFERENCES service_requests(id)
+				ON DELETE CASCADE,
+
+			previous_status VARCHAR(20),
+
+			new_status VARCHAR(20) NOT NULL
+				CHECK (
+					new_status IN (
+						'pending',
+						'accepted',
+						'rejected',
+						'cancelled',
+						'completed'
+					)
+				),
+
+			changed_by_role VARCHAR(20) NOT NULL
+				CHECK (
+					changed_by_role IN (
+						'customer',
+						'doer',
+						'system'
+					)
+				),
+
+			changed_by_user_id INTEGER NOT NULL,
+
+			comment TEXT NOT NULL DEFAULT '',
+
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_service_request_history_request
+			ON service_request_status_history (
+				service_request_id,
+				created_at,
+				id
+			);
+
+		-- Backfill an initial pending record for requests created before this
+		-- history table existed. Previous historical transitions cannot be
+		-- reconstructed safely and are intentionally not fabricated.
+		INSERT INTO service_request_status_history (
+			service_request_id,
+			previous_status,
+			new_status,
+			changed_by_role,
+			changed_by_user_id,
+			comment,
+			created_at
+		)
+		SELECT
+			sr.id,
+			NULL,
+			'pending',
+			'customer',
+			sr.customer_id,
+			'Request submitted',
+			sr.created_at
+		FROM service_requests sr
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM service_request_status_history history
+			WHERE history.service_request_id = sr.id
+		);
+
+		CREATE OR REPLACE FUNCTION record_initial_service_request_status()
+		RETURNS TRIGGER AS $$
+		BEGIN
+			INSERT INTO service_request_status_history (
+				service_request_id,
+				previous_status,
+				new_status,
+				changed_by_role,
+				changed_by_user_id,
+				comment,
+				created_at
+			)
+			VALUES (
+				NEW.id,
+				NULL,
+				NEW.status,
+				'customer',
+				NEW.customer_id,
+				'Request submitted',
+				NEW.created_at
+			);
+
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+
+		DROP TRIGGER IF EXISTS
+			trg_service_request_initial_status
+			ON service_requests;
+
+		CREATE TRIGGER trg_service_request_initial_status
+			AFTER INSERT ON service_requests
+			FOR EACH ROW
+			EXECUTE FUNCTION record_initial_service_request_status();
 	`
 
 	if _, err := DB.PG.Exec(query); err != nil {
 		return fmt.Errorf(
-			"set up service request PostgreSQL schema: %w",
+			"set up service-request PostgreSQL schema: %w",
 			err,
 		)
 	}
@@ -90,7 +201,6 @@ func setupServiceRequestSchema() error {
 	return nil
 }
 
-// CreateServiceRequest creates a pending request and returns its database ID.
 func (d *Database) CreateServiceRequest(
 	ctx context.Context,
 	request models.ServiceRequest,
@@ -123,7 +233,7 @@ func (d *Database) CreateServiceRequest(
 		request.ServicePrice,
 		request.CustomerID,
 		request.DoerID,
-		strings.TrimSpace(request.Message),
+		request.Message,
 		request.RequestedDate,
 		models.ServiceRequestStatusPending,
 	).Scan(&requestID)
@@ -174,38 +284,11 @@ func (d *Database) GetServiceRequestsByCustomer(
 		ORDER BY sr.created_at DESC
 	`
 
-	rows, err := d.PG.QueryContext(ctx, query, customerID)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"query customer service requests: %w",
-			err,
-		)
-	}
-	defer rows.Close()
-
-	requests := make([]models.ServiceRequest, 0)
-
-	for rows.Next() {
-		var request models.ServiceRequest
-
-		if err := scanServiceRequest(rows, &request); err != nil {
-			return nil, fmt.Errorf(
-				"scan customer service request: %w",
-				err,
-			)
-		}
-
-		requests = append(requests, request)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf(
-			"iterate customer service requests: %w",
-			err,
-		)
-	}
-
-	return requests, nil
+	return d.queryServiceRequests(
+		ctx,
+		query,
+		customerID,
+	)
 }
 
 func (d *Database) GetServiceRequestsByDoer(
@@ -243,38 +326,76 @@ func (d *Database) GetServiceRequestsByDoer(
 			sr.created_at DESC
 	`
 
-	rows, err := d.PG.QueryContext(ctx, query, doerID)
+	return d.queryServiceRequests(
+		ctx,
+		query,
+		doerID,
+	)
+}
+
+func (d *Database) GetServiceRequestForUser(
+	ctx context.Context,
+	requestID int64,
+	role string,
+	userID int,
+) (models.ServiceRequest, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+
+	if role != "customer" && role != "doer" {
+		return models.ServiceRequest{},
+			ErrServiceRequestNotFound
+	}
+
+	const query = `
+		SELECT
+			sr.id,
+			sr.service_id,
+			sr.service_title,
+			sr.service_price,
+			sr.customer_id,
+			c.name,
+			sr.doer_id,
+			d.name,
+			sr.message,
+			sr.requested_date,
+			sr.status,
+			sr.doer_response,
+			sr.created_at,
+			sr.updated_at
+		FROM service_requests sr
+		JOIN customers c
+			ON c.id = sr.customer_id
+		JOIN doers d
+			ON d.id = sr.doer_id
+		WHERE sr.id = $1
+		  AND (
+			($2 = 'customer' AND sr.customer_id = $3)
+			OR
+			($2 = 'doer' AND sr.doer_id = $3)
+		  )
+	`
+
+	request, err := scanServiceRequest(
+		d.PG.QueryRowContext(
+			ctx,
+			query,
+			requestID,
+			role,
+			userID,
+		),
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.ServiceRequest{},
+			ErrServiceRequestNotFound
+	}
 	if err != nil {
-		return nil, fmt.Errorf(
-			"query doer service requests: %w",
-			err,
-		)
-	}
-	defer rows.Close()
-
-	requests := make([]models.ServiceRequest, 0)
-
-	for rows.Next() {
-		var request models.ServiceRequest
-
-		if err := scanServiceRequest(rows, &request); err != nil {
-			return nil, fmt.Errorf(
-				"scan doer service request: %w",
-				err,
-			)
-		}
-
-		requests = append(requests, request)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf(
-			"iterate doer service requests: %w",
+		return models.ServiceRequest{}, fmt.Errorf(
+			"get service request: %w",
 			err,
 		)
 	}
 
-	return requests, nil
+	return request, nil
 }
 
 func (d *Database) UpdateServiceRequestStatus(
@@ -284,6 +405,11 @@ func (d *Database) UpdateServiceRequestStatus(
 	nextStatus string,
 	doerResponse string,
 ) error {
+	nextStatus = strings.ToLower(
+		strings.TrimSpace(nextStatus),
+	)
+	doerResponse = strings.TrimSpace(doerResponse)
+
 	switch nextStatus {
 	case models.ServiceRequestStatusAccepted,
 		models.ServiceRequestStatusRejected,
@@ -292,34 +418,78 @@ func (d *Database) UpdateServiceRequestStatus(
 		return ErrInvalidStatusTransition
 	}
 
-	const query = `
-		UPDATE service_requests
-		SET
-			status = $3,
-			doer_response = $4,
-			updated_at = NOW()
-		WHERE id = $1
-		  AND doer_id = $2
-		  AND (
-			(
-				status = 'pending'
-				AND $3 IN ('accepted', 'rejected')
-			)
-			OR
-			(
-				status = 'accepted'
-				AND $3 = 'completed'
-			)
-		  )
-	`
-
-	result, err := d.PG.ExecContext(
+	transaction, err := d.PG.BeginTx(
 		ctx,
-		query,
+		&sql.TxOptions{
+			Isolation: sql.LevelReadCommitted,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"begin service request update: %w",
+			err,
+		)
+	}
+	defer transaction.Rollback()
+
+	var currentStatus string
+
+	err = transaction.QueryRowContext(
+		ctx,
+		`
+			SELECT status
+			FROM service_requests
+			WHERE id = $1
+			  AND doer_id = $2
+			FOR UPDATE
+		`,
+		requestID,
+		doerID,
+	).Scan(&currentStatus)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrServiceRequestNotFound
+	}
+	if err != nil {
+		return fmt.Errorf(
+			"lock service request: %w",
+			err,
+		)
+	}
+
+	if !validDoerStatusTransition(
+		currentStatus,
+		nextStatus,
+	) {
+		return ErrInvalidStatusTransition
+	}
+
+	if nextStatus == models.ServiceRequestStatusRejected &&
+		doerResponse == "" {
+		return fmt.Errorf(
+			"%w: a rejection reason is required",
+			ErrInvalidStatusTransition,
+		)
+	}
+
+	_, err = transaction.ExecContext(
+		ctx,
+		`
+			UPDATE service_requests
+			SET
+				status = $3,
+				doer_response = CASE
+					WHEN $4 = '' THEN doer_response
+					ELSE $4
+				END,
+				updated_at = NOW()
+			WHERE id = $1
+			  AND doer_id = $2
+		`,
 		requestID,
 		doerID,
 		nextStatus,
-		strings.TrimSpace(doerResponse),
+		doerResponse,
 	)
 	if err != nil {
 		return fmt.Errorf(
@@ -328,16 +498,24 @@ func (d *Database) UpdateServiceRequestStatus(
 		)
 	}
 
-	affectedRows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"read updated request count: %w",
-			err,
-		)
+	if err := insertServiceRequestHistory(
+		ctx,
+		transaction,
+		requestID,
+		currentStatus,
+		nextStatus,
+		"doer",
+		doerID,
+		doerResponse,
+	); err != nil {
+		return err
 	}
 
-	if affectedRows == 0 {
-		return ErrServiceRequestNotFound
+	if err := transaction.Commit(); err != nil {
+		return fmt.Errorf(
+			"commit service request update: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -348,21 +526,62 @@ func (d *Database) CancelServiceRequest(
 	requestID int64,
 	customerID int,
 ) error {
-	const query = `
-		UPDATE service_requests
-		SET
-			status = 'cancelled',
-			updated_at = NOW()
-		WHERE id = $1
-		  AND customer_id = $2
-		  AND status = 'pending'
-	`
-
-	result, err := d.PG.ExecContext(
+	transaction, err := d.PG.BeginTx(
 		ctx,
-		query,
+		&sql.TxOptions{
+			Isolation: sql.LevelReadCommitted,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"begin service request cancellation: %w",
+			err,
+		)
+	}
+	defer transaction.Rollback()
+
+	var currentStatus string
+
+	err = transaction.QueryRowContext(
+		ctx,
+		`
+			SELECT status
+			FROM service_requests
+			WHERE id = $1
+			  AND customer_id = $2
+			FOR UPDATE
+		`,
 		requestID,
 		customerID,
+	).Scan(&currentStatus)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrServiceRequestNotFound
+	}
+	if err != nil {
+		return fmt.Errorf(
+			"lock service request for cancellation: %w",
+			err,
+		)
+	}
+
+	if currentStatus != models.ServiceRequestStatusPending {
+		return ErrInvalidStatusTransition
+	}
+
+	_, err = transaction.ExecContext(
+		ctx,
+		`
+			UPDATE service_requests
+			SET
+				status = $3,
+				updated_at = NOW()
+			WHERE id = $1
+			  AND customer_id = $2
+		`,
+		requestID,
+		customerID,
+		models.ServiceRequestStatusCancelled,
 	)
 	if err != nil {
 		return fmt.Errorf(
@@ -371,30 +590,177 @@ func (d *Database) CancelServiceRequest(
 		)
 	}
 
-	affectedRows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"read cancelled request count: %w",
-			err,
-		)
+	if err := insertServiceRequestHistory(
+		ctx,
+		transaction,
+		requestID,
+		currentStatus,
+		models.ServiceRequestStatusCancelled,
+		"customer",
+		customerID,
+		"Cancelled by customer",
+	); err != nil {
+		return err
 	}
 
-	if affectedRows == 0 {
-		return ErrServiceRequestNotFound
+	if err := transaction.Commit(); err != nil {
+		return fmt.Errorf(
+			"commit service request cancellation: %w",
+			err,
+		)
 	}
 
 	return nil
 }
 
-type serviceRequestScanner interface {
-	Scan(dest ...any) error
+func (d *Database) GetServiceRequestStatusHistory(
+	ctx context.Context,
+	requestID int64,
+	role string,
+	userID int,
+) ([]models.ServiceRequestStatusHistory, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+
+	if role != "customer" && role != "doer" {
+		return nil, ErrServiceRequestNotFound
+	}
+
+	const query = `
+		SELECT
+			history.id,
+			history.service_request_id,
+			COALESCE(history.previous_status, ''),
+			history.new_status,
+			history.changed_by_role,
+			history.changed_by_user_id,
+			history.comment,
+			history.created_at
+		FROM service_request_status_history history
+		JOIN service_requests request
+			ON request.id = history.service_request_id
+		WHERE history.service_request_id = $1
+		  AND (
+			($2 = 'customer' AND request.customer_id = $3)
+			OR
+			($2 = 'doer' AND request.doer_id = $3)
+		  )
+		ORDER BY history.created_at, history.id
+	`
+
+	rows, err := d.PG.QueryContext(
+		ctx,
+		query,
+		requestID,
+		role,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"query service request history: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	history := make(
+		[]models.ServiceRequestStatusHistory,
+		0,
+	)
+
+	for rows.Next() {
+		var item models.ServiceRequestStatusHistory
+
+		if err := rows.Scan(
+			&item.ID,
+			&item.ServiceRequestID,
+			&item.PreviousStatus,
+			&item.NewStatus,
+			&item.ChangedByRole,
+			&item.ChangedByUserID,
+			&item.Comment,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"scan service request history: %w",
+				err,
+			)
+		}
+
+		history = append(history, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"iterate service request history: %w",
+			err,
+		)
+	}
+
+	if len(history) == 0 {
+		if _, err := d.GetServiceRequestForUser(
+			ctx,
+			requestID,
+			role,
+			userID,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return history, nil
+}
+
+func (d *Database) queryServiceRequests(
+	ctx context.Context,
+	query string,
+	ownerID int,
+) ([]models.ServiceRequest, error) {
+	rows, err := d.PG.QueryContext(
+		ctx,
+		query,
+		ownerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"query service requests: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	requests := make(
+		[]models.ServiceRequest,
+		0,
+	)
+
+	for rows.Next() {
+		request, err := scanServiceRequest(rows)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"scan service request: %w",
+				err,
+			)
+		}
+
+		requests = append(requests, request)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"iterate service requests: %w",
+			err,
+		)
+	}
+
+	return requests, nil
 }
 
 func scanServiceRequest(
-	scanner serviceRequestScanner,
-	request *models.ServiceRequest,
-) error {
-	return scanner.Scan(
+	scanner rowScanner,
+) (models.ServiceRequest, error) {
+	var request models.ServiceRequest
+
+	err := scanner.Scan(
 		&request.ID,
 		&request.ServiceID,
 		&request.ServiceTitle,
@@ -410,4 +776,68 @@ func scanServiceRequest(
 		&request.CreatedAt,
 		&request.UpdatedAt,
 	)
+
+	return request, err
+}
+
+func validDoerStatusTransition(
+	currentStatus string,
+	nextStatus string,
+) bool {
+	switch currentStatus {
+	case models.ServiceRequestStatusPending:
+		return nextStatus ==
+			models.ServiceRequestStatusAccepted ||
+			nextStatus ==
+				models.ServiceRequestStatusRejected
+
+	case models.ServiceRequestStatusAccepted:
+		return nextStatus ==
+			models.ServiceRequestStatusCompleted
+
+	default:
+		return false
+	}
+}
+
+func insertServiceRequestHistory(
+	ctx context.Context,
+	transaction *sql.Tx,
+	requestID int64,
+	previousStatus string,
+	nextStatus string,
+	changedByRole string,
+	changedByUserID int,
+	comment string,
+) error {
+	const query = `
+		INSERT INTO service_request_status_history (
+			service_request_id,
+			previous_status,
+			new_status,
+			changed_by_role,
+			changed_by_user_id,
+			comment
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	_, err := transaction.ExecContext(
+		ctx,
+		query,
+		requestID,
+		previousStatus,
+		nextStatus,
+		changedByRole,
+		changedByUserID,
+		strings.TrimSpace(comment),
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"record service request history: %w",
+			err,
+		)
+	}
+
+	return nil
 }

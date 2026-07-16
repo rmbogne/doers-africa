@@ -1,58 +1,50 @@
 {{define "content"}}
 <section style="max-width: 1200px; margin: 0 auto;">
-    <div
+    <header
         style="
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             gap: 1rem;
+            flex-wrap: wrap;
             margin-bottom: 2.5rem;
         "
     >
         <div>
-            <h1 style="font-size: 2.25rem; margin: 0 0 0.5rem;">
+            <h1 style="font-size: 2.25rem; margin-bottom: 0.5rem;">
                 Doer Dashboard
             </h1>
-            <p style="margin: 0; color: var(--text-muted);">
-                Review incoming requests and manage your listings.
+            <p style="color: var(--text-muted); margin: 0;">
+                Review customer requests, event RSVPs, services, and events.
             </p>
         </div>
 
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <a href="/doer/event/new" class="btn btn-secondary">
-                Add Event
-            </a>
             <a href="/doer/service/new" class="btn btn-primary">
                 Add Service
             </a>
+            <a href="/doer/event/new" class="btn btn-secondary">
+                Add Event
+            </a>
         </div>
-    </div>
+    </header>
 
-    <!-- Incoming service requests -->
     <section style="margin-bottom: 4rem;">
         <div
             style="
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                padding-bottom: 1rem;
                 margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
             "
         >
             <h2 style="margin: 0;">Incoming Service Requests</h2>
             <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                Pending requests appear first. Status actions are added in
-                Phase 2, Requirement 3.
+                Accept, reject, or complete customer requests.
             </p>
         </div>
 
         {{if .ServiceRequests}}
-            <div
-                style="
-                    display: grid;
-                    grid-template-columns:
-                        repeat(auto-fit, minmax(320px, 1fr));
-                    gap: 1.25rem;
-                "
-            >
+            <div style="display: grid; gap: 1.25rem;">
                 {{range .ServiceRequests}}
                     <article
                         style="
@@ -68,6 +60,7 @@
                                 justify-content: space-between;
                                 align-items: flex-start;
                                 gap: 1rem;
+                                flex-wrap: wrap;
                                 margin-bottom: 1rem;
                             "
                         >
@@ -76,78 +69,31 @@
                                     {{.ServiceTitle}}
                                 </h3>
                                 <p style="margin: 0; color: var(--text-muted);">
-                                    Requested by
+                                    Customer:
                                     <strong>{{.CustomerName}}</strong>
                                 </p>
                             </div>
 
-                            {{if eq .Status "pending"}}
-                                <span
-                                    style="
-                                        background: rgba(245,158,11,0.18);
-                                        color: #fbbf24;
-                                        border: 1px solid rgba(245,158,11,0.35);
-                                        border-radius: 9999px;
-                                        padding: 0.35rem 0.7rem;
-                                        font-size: 0.8rem;
-                                        font-weight: 700;
-                                        text-transform: capitalize;
-                                    "
-                                >
-                                    {{.Status}}
-                                </span>
-                            {{else if eq .Status "accepted"}}
-                                <span
-                                    style="
-                                        background: rgba(34,197,94,0.18);
-                                        color: #4ade80;
-                                        border: 1px solid rgba(34,197,94,0.35);
-                                        border-radius: 9999px;
-                                        padding: 0.35rem 0.7rem;
-                                        font-size: 0.8rem;
-                                        font-weight: 700;
-                                        text-transform: capitalize;
-                                    "
-                                >
-                                    {{.Status}}
-                                </span>
-                            {{else if eq .Status "completed"}}
-                                <span
-                                    style="
-                                        background: rgba(59,130,246,0.18);
-                                        color: #60a5fa;
-                                        border: 1px solid rgba(59,130,246,0.35);
-                                        border-radius: 9999px;
-                                        padding: 0.35rem 0.7rem;
-                                        font-size: 0.8rem;
-                                        font-weight: 700;
-                                        text-transform: capitalize;
-                                    "
-                                >
-                                    {{.Status}}
-                                </span>
-                            {{else}}
-                                <span
-                                    style="
-                                        background: rgba(239,68,68,0.18);
-                                        color: #f87171;
-                                        border: 1px solid rgba(239,68,68,0.35);
-                                        border-radius: 9999px;
-                                        padding: 0.35rem 0.7rem;
-                                        font-size: 0.8rem;
-                                        font-weight: 700;
-                                        text-transform: capitalize;
-                                    "
-                                >
-                                    {{.Status}}
-                                </span>
-                            {{end}}
+                            <span
+                                style="
+                                    display: inline-block;
+                                    padding: 0.35rem 0.7rem;
+                                    border-radius: 9999px;
+                                    background: rgba(255,255,255,0.08);
+                                    font-size: 0.8rem;
+                                    font-weight: 700;
+                                    text-transform: capitalize;
+                                "
+                            >
+                                {{.Status}}
+                            </span>
                         </div>
 
                         <div
                             style="
                                 display: grid;
-                                grid-template-columns: 1fr 1fr;
+                                grid-template-columns:
+                                    repeat(auto-fit, minmax(180px, 1fr));
                                 gap: 0.75rem;
                                 margin-bottom: 1rem;
                             "
@@ -155,57 +101,60 @@
                             <div
                                 style="
                                     background: rgba(255,255,255,0.04);
-                                    padding: 0.8rem;
                                     border-radius: 0.6rem;
+                                    padding: 0.8rem;
                                 "
                             >
-                                <div
-                                    style="
-                                        color: var(--text-muted);
-                                        font-size: 0.8rem;
-                                        margin-bottom: 0.25rem;
-                                    "
-                                >
+                                <small style="color: var(--text-muted);">
                                     Requested date
+                                </small>
+                                <div>
+                                    <strong>
+                                        {{.RequestedDate.Format "Jan 02, 2006"}}
+                                    </strong>
                                 </div>
-                                <strong>
-                                    {{.RequestedDate.Format "Jan 02, 2006"}}
-                                </strong>
                             </div>
 
                             <div
                                 style="
                                     background: rgba(255,255,255,0.04);
-                                    padding: 0.8rem;
                                     border-radius: 0.6rem;
+                                    padding: 0.8rem;
                                 "
                             >
-                                <div
-                                    style="
-                                        color: var(--text-muted);
-                                        font-size: 0.8rem;
-                                        margin-bottom: 0.25rem;
-                                    "
-                                >
+                                <small style="color: var(--text-muted);">
                                     Listed price
+                                </small>
+                                <div>
+                                    <strong>${{.ServicePrice}}</strong>
                                 </div>
-                                <strong>${{.ServicePrice}}</strong>
+                            </div>
+
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.04);
+                                    border-radius: 0.6rem;
+                                    padding: 0.8rem;
+                                "
+                            >
+                                <small style="color: var(--text-muted);">
+                                    Submitted
+                                </small>
+                                <div>
+                                    <strong>
+                                        {{.CreatedAt.Format "Jan 02, 2006"}}
+                                    </strong>
+                                </div>
                             </div>
                         </div>
 
                         <div style="margin-bottom: 1rem;">
-                            <div
-                                style="
-                                    color: var(--text-muted);
-                                    font-size: 0.8rem;
-                                    margin-bottom: 0.35rem;
-                                "
-                            >
+                            <small style="color: var(--text-muted);">
                                 Customer request
-                            </div>
+                            </small>
                             <p
                                 style="
-                                    margin: 0;
+                                    margin: 0.35rem 0 0;
                                     line-height: 1.6;
                                     overflow-wrap: anywhere;
                                 "
@@ -219,20 +168,15 @@
                                 style="
                                     background: rgba(255,255,255,0.05);
                                     border-left: 3px solid var(--accent);
+                                    border-radius: 0.4rem;
                                     padding: 0.9rem 1rem;
                                     margin-bottom: 1rem;
                                 "
                             >
-                                <div
-                                    style="
-                                        color: var(--text-muted);
-                                        font-size: 0.8rem;
-                                        margin-bottom: 0.35rem;
-                                    "
-                                >
-                                    Your response
-                                </div>
-                                <p style="margin: 0; line-height: 1.6;">
+                                <small style="color: var(--text-muted);">
+                                    Your latest response
+                                </small>
+                                <p style="margin: 0.35rem 0 0;">
                                     {{.DoerResponse}}
                                 </p>
                             </div>
@@ -241,26 +185,163 @@
                         <div
                             style="
                                 display: flex;
-                                justify-content: space-between;
+                                gap: 0.75rem;
                                 align-items: center;
-                                gap: 1rem;
-                                border-top:
-                                    1px solid rgba(255,255,255,0.08);
-                                padding-top: 1rem;
+                                flex-wrap: wrap;
+                                margin-bottom: 1rem;
                             "
                         >
-                            <small style="color: var(--text-muted);">
-                                Submitted
-                                {{.CreatedAt.Format "Jan 02, 2006"}}
-                            </small>
-
                             <a
                                 href="/service/{{.ServiceID}}"
                                 class="btn btn-secondary"
                             >
                                 View Service
                             </a>
+
+                            <a
+                                href="/service-request/history?id={{.ID}}"
+                                class="btn btn-secondary"
+                            >
+                                View History
+                            </a>
                         </div>
+
+                        {{if eq .Status "pending"}}
+                            <div
+                                style="
+                                    display: grid;
+                                    grid-template-columns:
+                                        repeat(auto-fit, minmax(260px, 1fr));
+                                    gap: 1rem;
+                                    padding-top: 1rem;
+                                    border-top:
+                                        1px solid rgba(255,255,255,0.08);
+                                "
+                            >
+                                <form
+                                    action="/doer/service-request/status"
+                                    method="POST"
+                                    style="
+                                        display: grid;
+                                        gap: 0.75rem;
+                                        margin: 0;
+                                    "
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="request_id"
+                                        value="{{.ID}}"
+                                    >
+                                    <input
+                                        type="hidden"
+                                        name="status"
+                                        value="accepted"
+                                    >
+
+                                    <label for="accept-response-{{.ID}}">
+                                        Acceptance message
+                                    </label>
+
+                                    <textarea
+                                        id="accept-response-{{.ID}}"
+                                        name="response"
+                                        maxlength="2000"
+                                        placeholder="Optional scheduling or service details"
+                                        style="min-height: 100px;"
+                                    ></textarea>
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-primary"
+                                    >
+                                        Accept Request
+                                    </button>
+                                </form>
+
+                                <form
+                                    action="/doer/service-request/status"
+                                    method="POST"
+                                    style="
+                                        display: grid;
+                                        gap: 0.75rem;
+                                        margin: 0;
+                                    "
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="request_id"
+                                        value="{{.ID}}"
+                                    >
+                                    <input
+                                        type="hidden"
+                                        name="status"
+                                        value="rejected"
+                                    >
+
+                                    <label for="reject-response-{{.ID}}">
+                                        Rejection reason
+                                    </label>
+
+                                    <textarea
+                                        id="reject-response-{{.ID}}"
+                                        name="response"
+                                        maxlength="2000"
+                                        required
+                                        style="min-height: 100px;"
+                                    ></textarea>
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-secondary"
+                                    >
+                                        Reject Request
+                                    </button>
+                                </form>
+                            </div>
+                        {{else if eq .Status "accepted"}}
+                            <form
+                                action="/doer/service-request/status"
+                                method="POST"
+                                style="
+                                    display: grid;
+                                    gap: 0.75rem;
+                                    padding-top: 1rem;
+                                    border-top:
+                                        1px solid rgba(255,255,255,0.08);
+                                    margin: 0;
+                                "
+                            >
+                                <input
+                                    type="hidden"
+                                    name="request_id"
+                                    value="{{.ID}}"
+                                >
+                                <input
+                                    type="hidden"
+                                    name="status"
+                                    value="completed"
+                                >
+
+                                <label for="complete-response-{{.ID}}">
+                                    Completion note
+                                </label>
+
+                                <textarea
+                                    id="complete-response-{{.ID}}"
+                                    name="response"
+                                    maxlength="2000"
+                                    placeholder="Optional completion details"
+                                    style="min-height: 90px;"
+                                ></textarea>
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary"
+                                >
+                                    Mark Completed
+                                </button>
+                            </form>
+                        {{end}}
                     </article>
                 {{end}}
             </div>
@@ -274,103 +355,77 @@
                     text-align: center;
                 "
             >
-                <h3 style="margin-top: 0;">No service requests yet</h3>
-                <p style="color: var(--text-muted); margin-bottom: 0;">
-                    Customer service requests will appear here.
+                <h3 style="margin-top: 0;">No service requests</h3>
+                <p style="color: var(--text-muted);">
+                    Customer requests for your services will appear here.
                 </p>
             </div>
         {{end}}
     </section>
 
-    <!-- Incoming event RSVPs -->
     <section style="margin-bottom: 4rem;">
         <div
             style="
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                padding-bottom: 1rem;
                 margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
             "
         >
             <h2 style="margin: 0;">Event RSVPs Received</h2>
             <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                Customers who RSVP'd to events you created.
+                Customers attending your events.
             </p>
         </div>
 
         {{if .EventRSVPs}}
-            <div style="overflow-x: auto;">
-                <table
-                    style="
-                        width: 100%;
-                        border-collapse: collapse;
-                        background: var(--bg-card);
-                        border: 1px solid rgba(255,255,255,0.1);
-                        border-radius: 1rem;
-                        overflow: hidden;
-                    "
-                >
-                    <thead>
-                        <tr style="background: rgba(255,255,255,0.05);">
-                            <th style="padding: 1rem; text-align: left;">
-                                Event
-                            </th>
-                            <th style="padding: 1rem; text-align: left;">
-                                Date
-                            </th>
-                            <th style="padding: 1rem; text-align: left;">
-                                Customer
-                            </th>
-                            <th style="padding: 1rem; text-align: left;">
-                                Contact
-                            </th>
-                            <th style="padding: 1rem; text-align: right;">
-                                Action
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{range .EventRSVPs}}
-                            <tr
-                                style="
-                                    border-top:
-                                        1px solid rgba(255,255,255,0.08);
-                                "
-                            >
-                                <td style="padding: 1rem;">
-                                    <strong>{{.EventTitle}}</strong>
-                                    <div
-                                        style="
-                                            color: var(--text-muted);
-                                            font-size: 0.85rem;
-                                            margin-top: 0.25rem;
-                                        "
-                                    >
-                                        {{.EventLocation}}
-                                    </div>
-                                </td>
-                                <td style="padding: 1rem;">
-                                    {{.EventDate}}
-                                </td>
-                                <td style="padding: 1rem;">
-                                    {{.CustomerName}}
-                                </td>
-                                <td style="padding: 1rem;">
-                                    <a href="mailto:{{.CustomerEmail}}">
-                                        {{.CustomerEmail}}
-                                    </a>
-                                </td>
-                                <td style="padding: 1rem; text-align: right;">
-                                    <a
-                                        href="/event/{{.EventID}}"
-                                        class="btn btn-secondary"
-                                    >
-                                        View Event
-                                    </a>
-                                </td>
-                            </tr>
-                        {{end}}
-                    </tbody>
-                </table>
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
+                {{range .EventRSVPs}}
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <h3 style="margin: 0 0 0.75rem;">
+                            {{.EventTitle}}
+                        </h3>
+
+                        <p style="margin: 0.35rem 0;">
+                            <strong>Date:</strong> {{.EventDate}}
+                        </p>
+
+                        <p style="margin: 0.35rem 0;">
+                            <strong>Location:</strong> {{.EventLocation}}
+                        </p>
+
+                        <p style="margin: 1rem 0 0.35rem;">
+                            <strong>Customer:</strong> {{.CustomerName}}
+                        </p>
+
+                        <p style="margin: 0.35rem 0 1rem;">
+                            <strong>Email:</strong>
+                            <a href="mailto:{{.CustomerEmail}}">
+                                {{.CustomerEmail}}
+                            </a>
+                        </p>
+
+                        <a
+                            href="/event/{{.EventID}}"
+                            class="btn btn-secondary"
+                        >
+                            View Event
+                        </a>
+                    </article>
+                {{end}}
             </div>
         {{else}}
             <div
@@ -382,27 +437,36 @@
                     text-align: center;
                 "
             >
-                <h3 style="margin-top: 0;">No event RSVPs yet</h3>
-                <p style="color: var(--text-muted); margin-bottom: 0;">
+                <h3 style="margin-top: 0;">No event RSVPs</h3>
+                <p style="color: var(--text-muted);">
                     Customers who RSVP to your events will appear here.
                 </p>
             </div>
         {{end}}
     </section>
 
-    <!-- Services managed by the doer -->
     <section style="margin-bottom: 4rem;">
         <div
             style="
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                padding-bottom: 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1rem;
                 margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
             "
         >
-            <h2 style="margin: 0;">My Services</h2>
-            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                Services currently offered to customers.
-            </p>
+            <div>
+                <h2 style="margin: 0;">My Services</h2>
+                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                    Services currently offered to customers.
+                </p>
+            </div>
+
+            <a href="/doer/service/new" class="btn btn-primary">
+                Add Service
+            </a>
         </div>
 
         {{if .Services}}
@@ -423,17 +487,21 @@
                             padding: 1.5rem;
                         "
                     >
-                        <h3 style="margin: 0 0 0.5rem;">{{.Title}}</h3>
+                        <h3 style="margin: 0 0 0.5rem;">
+                            {{.Title}}
+                        </h3>
+
                         <p
                             style="
                                 color: var(--accent);
-                                font-size: 1.25rem;
+                                font-size: 1.2rem;
                                 font-weight: 700;
-                                margin: 0 0 0.8rem;
+                                margin: 0 0 0.75rem;
                             "
                         >
                             ${{.Price}}
                         </p>
+
                         <p
                             style="
                                 color: var(--text-muted);
@@ -447,25 +515,25 @@
                             style="
                                 display: flex;
                                 gap: 0.75rem;
-                                margin-top: 1.25rem;
+                                flex-wrap: wrap;
                             "
                         >
                             <a
                                 href="/service/{{.ID.Hex}}"
                                 class="btn btn-secondary"
-                                style="flex: 1; text-align: center;"
                             >
                                 View
                             </a>
+
                             <form
                                 action="/doer/service/archive/{{.ID.Hex}}"
                                 method="POST"
-                                style="flex: 1;"
+                                style="margin: 0;"
+                                onsubmit="return confirm('Archive this service?');"
                             >
                                 <button
                                     type="submit"
                                     class="btn btn-secondary"
-                                    style="width: 100%;"
                                 >
                                     Archive
                                 </button>
@@ -476,24 +544,33 @@
             </div>
         {{else}}
             <p style="color: var(--text-muted);">
-                You have not created a service yet.
+                You have not created any services.
             </p>
         {{end}}
     </section>
 
-    <!-- Events managed by the doer -->
     <section>
         <div
             style="
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                padding-bottom: 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1rem;
                 margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
             "
         >
-            <h2 style="margin: 0;">My Events</h2>
-            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
-                Events you created for the community.
-            </p>
+            <div>
+                <h2 style="margin: 0;">My Events</h2>
+                <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                    Events you created for customers.
+                </p>
+            </div>
+
+            <a href="/doer/event/new" class="btn btn-primary">
+                Add Event
+            </a>
         </div>
 
         {{if .Events}}
@@ -527,10 +604,14 @@
                             {{.Date}}
                         </div>
 
-                        <h3 style="margin: 0 0 0.6rem;">{{.Title}}</h3>
-                        <p style="color: var(--accent); margin: 0 0 0.8rem;">
-                            📍 {{.Location}}
+                        <h3 style="margin: 0 0 0.6rem;">
+                            {{.Title}}
+                        </h3>
+
+                        <p style="color: var(--accent); margin: 0 0 0.75rem;">
+                            {{.Location}}
                         </p>
+
                         <p
                             style="
                                 color: var(--text-muted);
@@ -543,9 +624,8 @@
                         <div
                             style="
                                 display: flex;
-                                gap: 0.6rem;
+                                gap: 0.75rem;
                                 flex-wrap: wrap;
-                                margin-top: 1.25rem;
                             "
                         >
                             <a
@@ -554,15 +634,19 @@
                             >
                                 View
                             </a>
+
                             <a
                                 href="/doer/event/edit?id={{.ID.Hex}}"
                                 class="btn btn-secondary"
                             >
                                 Edit
                             </a>
+
                             <form
                                 action="/doer/event/archive/{{.ID.Hex}}"
                                 method="POST"
+                                style="margin: 0;"
+                                onsubmit="return confirm('Archive this event?');"
                             >
                                 <button
                                     type="submit"
@@ -577,7 +661,7 @@
             </div>
         {{else}}
             <p style="color: var(--text-muted);">
-                You have not created an event yet.
+                You have not created any events.
             </p>
         {{end}}
     </section>

@@ -1,0 +1,110 @@
+{{define "content"}}
+<section style="max-width: 850px; margin: 0 auto;">
+    <div
+        style="
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        "
+    >
+        <a
+            href="{{if eq .Role "customer"}}/customer/dashboard{{else}}/doer/dashboard{{end}}"
+            style="display: inline-block; margin-bottom: 1rem;"
+        >
+            ← Back to dashboard
+        </a>
+
+        <h1 style="margin: 0 0 0.75rem;">
+            {{.ServiceRequest.ServiceTitle}}
+        </h1>
+
+        <p style="margin: 0.35rem 0;">
+            <strong>Customer:</strong>
+            {{.ServiceRequest.CustomerName}}
+        </p>
+
+        <p style="margin: 0.35rem 0;">
+            <strong>Provider:</strong>
+            {{.ServiceRequest.DoerName}}
+        </p>
+
+        <p style="margin: 0.35rem 0;">
+            <strong>Current status:</strong>
+            <span style="text-transform: capitalize;">
+                {{.ServiceRequest.Status}}
+            </span>
+        </p>
+
+        <p style="margin: 0.35rem 0;">
+            <strong>Requested date:</strong>
+            {{.ServiceRequest.RequestedDate.Format "Jan 02, 2006"}}
+        </p>
+    </div>
+
+    <div
+        style="
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 1rem;
+            padding: 2rem;
+        "
+    >
+        <h2 style="margin-top: 0;">Status History</h2>
+
+        {{if .StatusHistory}}
+            <div style="display: grid; gap: 1rem;">
+                {{range .StatusHistory}}
+                    <article
+                        style="
+                            border-left: 4px solid var(--accent);
+                            background: rgba(255,255,255,0.04);
+                            border-radius: 0.5rem;
+                            padding: 1rem 1.25rem;
+                        "
+                    >
+                        <div
+                            style="
+                                display: flex;
+                                justify-content: space-between;
+                                gap: 1rem;
+                                flex-wrap: wrap;
+                            "
+                        >
+                            <strong style="text-transform: capitalize;">
+                                {{if .PreviousStatus}}
+                                    {{.PreviousStatus}} → {{.NewStatus}}
+                                {{else}}
+                                    Request created as {{.NewStatus}}
+                                {{end}}
+                            </strong>
+
+                            <time style="color: var(--text-muted);">
+                                {{.CreatedAt.Format "Jan 02, 2006 3:04 PM"}}
+                            </time>
+                        </div>
+
+                        <p
+                            style="
+                                margin: 0.5rem 0 0;
+                                color: var(--text-muted);
+                            "
+                        >
+                            Changed by {{.ChangedByRole}}
+                        </p>
+
+                        {{if .Comment}}
+                            <p style="margin: 0.75rem 0 0;">
+                                {{.Comment}}
+                            </p>
+                        {{end}}
+                    </article>
+                {{end}}
+            </div>
+        {{else}}
+            <p>No status history is available.</p>
+        {{end}}
+    </div>
+</section>
+{{end}}
