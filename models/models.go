@@ -1,6 +1,10 @@
 package models
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type Doer struct {
 	ID           int
@@ -46,4 +50,34 @@ type Service struct {
 type RSVP struct {
 	EventID    string
 	CustomerID int
+}
+
+const (
+	ServiceRequestStatusPending   = "pending"
+	ServiceRequestStatusAccepted  = "accepted"
+	ServiceRequestStatusRejected  = "rejected"
+	ServiceRequestStatusCancelled = "cancelled"
+	ServiceRequestStatusCompleted = "completed"
+)
+
+type ServiceRequest struct {
+	ID int64
+
+	ServiceID    string
+	ServiceTitle string
+	ServicePrice int
+
+	CustomerID   int
+	CustomerName string
+
+	DoerID   int
+	DoerName string
+
+	Message       string
+	RequestedDate time.Time
+	Status        string
+	DoerResponse  string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

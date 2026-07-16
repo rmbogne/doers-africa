@@ -1,43 +1,585 @@
 {{define "content"}}
-<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-    <h2>Doer Dashboard</h2>
-    <a href="/doer/event/new" class="btn btn-primary">+ Add Event</a>
-</div>
-<h3>My Events</h3>
-<div class="grid-listing" style="margin-bottom: 3rem;">
-    {{range .Events}}
-    <div class="card">
-        <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
-        <h4>{{.Title}}</h4>
-        <p class="text-muted">{{.Description}}</p>
-        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-            <a href="/doer/event/edit/{{.ID.Hex}}" class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">Edit</a>
-            <form action="/doer/event/archive/{{.ID}}" method="POST" style="display: inline;">
-                <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3);">Archive</button>
-            </form>
+<section style="max-width: 1200px; margin: 0 auto;">
+    <div
+        style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        "
+    >
+        <div>
+            <h1 style="font-size: 2.25rem; margin: 0 0 0.5rem;">
+                Doer Dashboard
+            </h1>
+            <p style="margin: 0; color: var(--text-muted);">
+                Review incoming requests and manage your listings.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <a href="/doer/event/new" class="btn btn-secondary">
+                Add Event
+            </a>
+            <a href="/doer/service/new" class="btn btn-primary">
+                Add Service
+            </a>
         </div>
     </div>
-    {{else}}
-    <p class="text-muted">No events created yet.</p>
-    {{end}}
-</div>
-<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-    <h3>My Services</h3>
-    <a href="/doer/service/new" class="btn btn-primary">+ Add Service</a>
-</div>
-<div class="grid-listing">
-    {{range .Services}}
-    <div class="card">
-        <h4>{{.Title}} <span style="font-weight: normal; color: var(--accent); float: right;">${{.Price}}</span></h4>
-        <p class="text-muted" style="margin-top: 0.5rem;">{{.Description}}</p>
-        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-            <form action="/doer/service/archive/{{.ID}}" method="POST" style="display: inline;">
-                <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3);">Archive</button>
-            </form>
+
+    <!-- Incoming service requests -->
+    <section style="margin-bottom: 4rem;">
+        <div
+            style="
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: 1rem;
+                margin-bottom: 1.25rem;
+            "
+        >
+            <h2 style="margin: 0;">Incoming Service Requests</h2>
+            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                Pending requests appear first. Status actions are added in
+                Phase 2, Requirement 3.
+            </p>
         </div>
-    </div>
-    {{else}}
-    <p class="text-muted">No services offered yet.</p>
-    {{end}}
-</div>
+
+        {{if .ServiceRequests}}
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(320px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
+                {{range .ServiceRequests}}
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <div
+                            style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: flex-start;
+                                gap: 1rem;
+                                margin-bottom: 1rem;
+                            "
+                        >
+                            <div>
+                                <h3 style="margin: 0 0 0.4rem;">
+                                    {{.ServiceTitle}}
+                                </h3>
+                                <p style="margin: 0; color: var(--text-muted);">
+                                    Requested by
+                                    <strong>{{.CustomerName}}</strong>
+                                </p>
+                            </div>
+
+                            {{if eq .Status "pending"}}
+                                <span
+                                    style="
+                                        background: rgba(245,158,11,0.18);
+                                        color: #fbbf24;
+                                        border: 1px solid rgba(245,158,11,0.35);
+                                        border-radius: 9999px;
+                                        padding: 0.35rem 0.7rem;
+                                        font-size: 0.8rem;
+                                        font-weight: 700;
+                                        text-transform: capitalize;
+                                    "
+                                >
+                                    {{.Status}}
+                                </span>
+                            {{else if eq .Status "accepted"}}
+                                <span
+                                    style="
+                                        background: rgba(34,197,94,0.18);
+                                        color: #4ade80;
+                                        border: 1px solid rgba(34,197,94,0.35);
+                                        border-radius: 9999px;
+                                        padding: 0.35rem 0.7rem;
+                                        font-size: 0.8rem;
+                                        font-weight: 700;
+                                        text-transform: capitalize;
+                                    "
+                                >
+                                    {{.Status}}
+                                </span>
+                            {{else if eq .Status "completed"}}
+                                <span
+                                    style="
+                                        background: rgba(59,130,246,0.18);
+                                        color: #60a5fa;
+                                        border: 1px solid rgba(59,130,246,0.35);
+                                        border-radius: 9999px;
+                                        padding: 0.35rem 0.7rem;
+                                        font-size: 0.8rem;
+                                        font-weight: 700;
+                                        text-transform: capitalize;
+                                    "
+                                >
+                                    {{.Status}}
+                                </span>
+                            {{else}}
+                                <span
+                                    style="
+                                        background: rgba(239,68,68,0.18);
+                                        color: #f87171;
+                                        border: 1px solid rgba(239,68,68,0.35);
+                                        border-radius: 9999px;
+                                        padding: 0.35rem 0.7rem;
+                                        font-size: 0.8rem;
+                                        font-weight: 700;
+                                        text-transform: capitalize;
+                                    "
+                                >
+                                    {{.Status}}
+                                </span>
+                            {{end}}
+                        </div>
+
+                        <div
+                            style="
+                                display: grid;
+                                grid-template-columns: 1fr 1fr;
+                                gap: 0.75rem;
+                                margin-bottom: 1rem;
+                            "
+                        >
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.04);
+                                    padding: 0.8rem;
+                                    border-radius: 0.6rem;
+                                "
+                            >
+                                <div
+                                    style="
+                                        color: var(--text-muted);
+                                        font-size: 0.8rem;
+                                        margin-bottom: 0.25rem;
+                                    "
+                                >
+                                    Requested date
+                                </div>
+                                <strong>
+                                    {{.RequestedDate.Format "Jan 02, 2006"}}
+                                </strong>
+                            </div>
+
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.04);
+                                    padding: 0.8rem;
+                                    border-radius: 0.6rem;
+                                "
+                            >
+                                <div
+                                    style="
+                                        color: var(--text-muted);
+                                        font-size: 0.8rem;
+                                        margin-bottom: 0.25rem;
+                                    "
+                                >
+                                    Listed price
+                                </div>
+                                <strong>${{.ServicePrice}}</strong>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 1rem;">
+                            <div
+                                style="
+                                    color: var(--text-muted);
+                                    font-size: 0.8rem;
+                                    margin-bottom: 0.35rem;
+                                "
+                            >
+                                Customer request
+                            </div>
+                            <p
+                                style="
+                                    margin: 0;
+                                    line-height: 1.6;
+                                    overflow-wrap: anywhere;
+                                "
+                            >
+                                {{.Message}}
+                            </p>
+                        </div>
+
+                        {{if .DoerResponse}}
+                            <div
+                                style="
+                                    background: rgba(255,255,255,0.05);
+                                    border-left: 3px solid var(--accent);
+                                    padding: 0.9rem 1rem;
+                                    margin-bottom: 1rem;
+                                "
+                            >
+                                <div
+                                    style="
+                                        color: var(--text-muted);
+                                        font-size: 0.8rem;
+                                        margin-bottom: 0.35rem;
+                                    "
+                                >
+                                    Your response
+                                </div>
+                                <p style="margin: 0; line-height: 1.6;">
+                                    {{.DoerResponse}}
+                                </p>
+                            </div>
+                        {{end}}
+
+                        <div
+                            style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                gap: 1rem;
+                                border-top:
+                                    1px solid rgba(255,255,255,0.08);
+                                padding-top: 1rem;
+                            "
+                        >
+                            <small style="color: var(--text-muted);">
+                                Submitted
+                                {{.CreatedAt.Format "Jan 02, 2006"}}
+                            </small>
+
+                            <a
+                                href="/service/{{.ServiceID}}"
+                                class="btn btn-secondary"
+                            >
+                                View Service
+                            </a>
+                        </div>
+                    </article>
+                {{end}}
+            </div>
+        {{else}}
+            <div
+                style="
+                    background: var(--bg-card);
+                    border: 1px dashed rgba(255,255,255,0.18);
+                    border-radius: 1rem;
+                    padding: 2rem;
+                    text-align: center;
+                "
+            >
+                <h3 style="margin-top: 0;">No service requests yet</h3>
+                <p style="color: var(--text-muted); margin-bottom: 0;">
+                    Customer service requests will appear here.
+                </p>
+            </div>
+        {{end}}
+    </section>
+
+    <!-- Incoming event RSVPs -->
+    <section style="margin-bottom: 4rem;">
+        <div
+            style="
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: 1rem;
+                margin-bottom: 1.25rem;
+            "
+        >
+            <h2 style="margin: 0;">Event RSVPs Received</h2>
+            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                Customers who RSVP'd to events you created.
+            </p>
+        </div>
+
+        {{if .EventRSVPs}}
+            <div style="overflow-x: auto;">
+                <table
+                    style="
+                        width: 100%;
+                        border-collapse: collapse;
+                        background: var(--bg-card);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        border-radius: 1rem;
+                        overflow: hidden;
+                    "
+                >
+                    <thead>
+                        <tr style="background: rgba(255,255,255,0.05);">
+                            <th style="padding: 1rem; text-align: left;">
+                                Event
+                            </th>
+                            <th style="padding: 1rem; text-align: left;">
+                                Date
+                            </th>
+                            <th style="padding: 1rem; text-align: left;">
+                                Customer
+                            </th>
+                            <th style="padding: 1rem; text-align: left;">
+                                Contact
+                            </th>
+                            <th style="padding: 1rem; text-align: right;">
+                                Action
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .EventRSVPs}}
+                            <tr
+                                style="
+                                    border-top:
+                                        1px solid rgba(255,255,255,0.08);
+                                "
+                            >
+                                <td style="padding: 1rem;">
+                                    <strong>{{.EventTitle}}</strong>
+                                    <div
+                                        style="
+                                            color: var(--text-muted);
+                                            font-size: 0.85rem;
+                                            margin-top: 0.25rem;
+                                        "
+                                    >
+                                        {{.EventLocation}}
+                                    </div>
+                                </td>
+                                <td style="padding: 1rem;">
+                                    {{.EventDate}}
+                                </td>
+                                <td style="padding: 1rem;">
+                                    {{.CustomerName}}
+                                </td>
+                                <td style="padding: 1rem;">
+                                    <a href="mailto:{{.CustomerEmail}}">
+                                        {{.CustomerEmail}}
+                                    </a>
+                                </td>
+                                <td style="padding: 1rem; text-align: right;">
+                                    <a
+                                        href="/event/{{.EventID}}"
+                                        class="btn btn-secondary"
+                                    >
+                                        View Event
+                                    </a>
+                                </td>
+                            </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        {{else}}
+            <div
+                style="
+                    background: var(--bg-card);
+                    border: 1px dashed rgba(255,255,255,0.18);
+                    border-radius: 1rem;
+                    padding: 2rem;
+                    text-align: center;
+                "
+            >
+                <h3 style="margin-top: 0;">No event RSVPs yet</h3>
+                <p style="color: var(--text-muted); margin-bottom: 0;">
+                    Customers who RSVP to your events will appear here.
+                </p>
+            </div>
+        {{end}}
+    </section>
+
+    <!-- Services managed by the doer -->
+    <section style="margin-bottom: 4rem;">
+        <div
+            style="
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: 1rem;
+                margin-bottom: 1.25rem;
+            "
+        >
+            <h2 style="margin: 0;">My Services</h2>
+            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                Services currently offered to customers.
+            </p>
+        </div>
+
+        {{if .Services}}
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
+                {{range .Services}}
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <h3 style="margin: 0 0 0.5rem;">{{.Title}}</h3>
+                        <p
+                            style="
+                                color: var(--accent);
+                                font-size: 1.25rem;
+                                font-weight: 700;
+                                margin: 0 0 0.8rem;
+                            "
+                        >
+                            ${{.Price}}
+                        </p>
+                        <p
+                            style="
+                                color: var(--text-muted);
+                                line-height: 1.6;
+                            "
+                        >
+                            {{.Description}}
+                        </p>
+
+                        <div
+                            style="
+                                display: flex;
+                                gap: 0.75rem;
+                                margin-top: 1.25rem;
+                            "
+                        >
+                            <a
+                                href="/service/{{.ID.Hex}}"
+                                class="btn btn-secondary"
+                                style="flex: 1; text-align: center;"
+                            >
+                                View
+                            </a>
+                            <form
+                                action="/doer/service/archive/{{.ID.Hex}}"
+                                method="POST"
+                                style="flex: 1;"
+                            >
+                                <button
+                                    type="submit"
+                                    class="btn btn-secondary"
+                                    style="width: 100%;"
+                                >
+                                    Archive
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                {{end}}
+            </div>
+        {{else}}
+            <p style="color: var(--text-muted);">
+                You have not created a service yet.
+            </p>
+        {{end}}
+    </section>
+
+    <!-- Events managed by the doer -->
+    <section>
+        <div
+            style="
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: 1rem;
+                margin-bottom: 1.25rem;
+            "
+        >
+            <h2 style="margin: 0;">My Events</h2>
+            <p style="margin: 0.35rem 0 0; color: var(--text-muted);">
+                Events you created for the community.
+            </p>
+        </div>
+
+        {{if .Events}}
+            <div
+                style="
+                    display: grid;
+                    grid-template-columns:
+                        repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 1.25rem;
+                "
+            >
+                {{range .Events}}
+                    <article
+                        style="
+                            background: var(--bg-card);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 1rem;
+                            padding: 1.5rem;
+                        "
+                    >
+                        <div
+                            style="
+                                display: inline-block;
+                                background: rgba(255,255,255,0.08);
+                                border-radius: 0.5rem;
+                                padding: 0.45rem 0.7rem;
+                                margin-bottom: 1rem;
+                                font-weight: 700;
+                            "
+                        >
+                            {{.Date}}
+                        </div>
+
+                        <h3 style="margin: 0 0 0.6rem;">{{.Title}}</h3>
+                        <p style="color: var(--accent); margin: 0 0 0.8rem;">
+                            📍 {{.Location}}
+                        </p>
+                        <p
+                            style="
+                                color: var(--text-muted);
+                                line-height: 1.6;
+                            "
+                        >
+                            {{.Description}}
+                        </p>
+
+                        <div
+                            style="
+                                display: flex;
+                                gap: 0.6rem;
+                                flex-wrap: wrap;
+                                margin-top: 1.25rem;
+                            "
+                        >
+                            <a
+                                href="/event/{{.ID.Hex}}"
+                                class="btn btn-secondary"
+                            >
+                                View
+                            </a>
+                            <a
+                                href="/doer/event/edit?id={{.ID.Hex}}"
+                                class="btn btn-secondary"
+                            >
+                                Edit
+                            </a>
+                            <form
+                                action="/doer/event/archive/{{.ID.Hex}}"
+                                method="POST"
+                            >
+                                <button
+                                    type="submit"
+                                    class="btn btn-secondary"
+                                >
+                                    Archive
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                {{end}}
+            </div>
+        {{else}}
+            <p style="color: var(--text-muted);">
+                You have not created an event yet.
+            </p>
+        {{end}}
+    </section>
+</section>
 {{end}}

@@ -1,50 +1,124 @@
 {{define "content"}}
 <section>
-    <h1 style="margin-bottom: 2rem; font-size: 3rem; text-align: center;">Explore African Doers</h1>
+    <h1 style="margin-bottom: 2rem; font-size: 3rem; text-align: center;">
+        Explore African Doers
+    </h1>
+
     <p style="text-align: center; color: var(--text-muted); max-width: 600px; margin: 0 auto 3rem auto;">
-        Browse our network of talented service providers and discover upcoming local events across the continent.
+        Browse available services and discover upcoming local events.
     </p>
 
-    <!-- Doers Section -->
-    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">Service Providers</h2>
+    <!-- Services Section -->
+    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+        Available Services
+    </h2>
+
     <div class="grid-listing">
-        {{range .Doers}}
-        <div class="card">
-            {{if .Doer.FlyerURL}}
-            <img src="{{.Doer.FlyerURL}}" alt="{{.Doer.Name}} Flyer" style="width:100%; height:150px; object-fit:cover; border-radius:0.5rem; margin-bottom:1rem;">
-            {{end}}
-            <h3 style="font-size: 1.25rem;">{{.Service.Title}} <span style="font-size:0.9rem; font-weight:normal; background:var(--primary-color); padding:0.2rem 0.5rem; border-radius:1rem; color:white; float:right;">${{.Service.Price}}</span></h3>
-            <p style="margin: 0.5rem 0; font-size: 0.95rem;">{{.Service.Description}}</p>
-            
-            <div style="margin-top: auto; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
-                <span style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Provider</span>
-                <h4 style="margin: 0.25rem 0; font-size: 1rem;">{{.Doer.Name}} <span style="font-size:0.8rem; font-weight:normal; color:var(--accent);">({{.Doer.Category}})</span></h4>
+        {{range .ServiceViews}}
+            <div class="card">
+                {{if .Doer.FlyerURL}}
+                    <img
+                        src="{{.Doer.FlyerURL}}"
+                        alt="{{.Doer.Name}}"
+                        style="width: 100%; height: 150px; object-fit: cover; border-radius: 0.5rem; margin-bottom: 1rem;"
+                    >
+                {{end}}
+
+                <h3 style="font-size: 1.25rem;">
+                    {{.Service.Title}}
+
+                    <span style="font-size: 0.9rem; font-weight: normal; background: var(--primary-color); padding: 0.2rem 0.5rem; border-radius: 1rem; color: white; float: right;">
+                        ${{.Service.Price}}
+                    </span>
+                </h3>
+
+                <p style="margin: 0.5rem 0; font-size: 0.95rem;">
+                    {{.Service.Description}}
+                </p>
+
+                <div style="margin-top: auto; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                    <span style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">
+                        Provider
+                    </span>
+
+                    <h4 style="margin: 0.25rem 0; font-size: 1rem;">
+                        {{.Doer.Name}}
+
+                        {{if .Doer.Category}}
+                            <span style="font-size: 0.8rem; font-weight: normal; color: var(--accent);">
+                                ({{.Doer.Category}})
+                            </span>
+                        {{end}}
+                    </h4>
+                </div>
+
+                <div class="action-row" style="margin-top: 1rem;">
+                    <a
+                        href="/service/{{.Service.ID.Hex}}"
+                        class="btn btn-secondary"
+                        style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;"
+                    >
+                        View Details
+                    </a>
+                </div>
             </div>
-            
-            <div class="action-row" style="margin-top: 1rem;">
-                <a href="/service/{{.Service.ID.Hex}}" class="btn btn-secondary" style="display: block; text-align: center; background: rgba(255,255,255,0.05); width: 100%;">Details / Order</a>
-            </div>
-        </div>
+        {{else}}
+            <p>No services are currently available.</p>
         {{end}}
     </div>
+
     <!-- Events Section -->
-    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">Upcoming Events</h2>
+    <h2 style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-top: 4rem; margin-bottom: 1rem;">
+        Upcoming Events
+    </h2>
+
     <div class="grid-listing">
         {{range .Events}}
-        <div class="card">
-            <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">{{.Date}}</div>
-            <h3 style="font-size: 1.25rem;">{{.Title}}</h3>
-            <p style="color: var(--accent); margin: 0.5rem 0; font-size:0.9rem;">📍 {{.Location}}</p>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size:0.95rem;">{{.Description}}</p>
-            <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-                <a href="/event/{{.ID.Hex}}" class="btn btn-secondary" style="flex: 1; text-align: center;">Details</a>
-                {{if eq $.Role "customer"}}
-                    <form action="/event/{{.ID.Hex}}/rsvp" method="POST" style="flex: 1; display: flex;">
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">RSVP</button>
-                    </form>
-                {{end}}
+            <div class="card">
+                <div class="event-date" style="border-radius: 0.5rem; margin-bottom: 1rem; display: inline-block;">
+                    {{.Date}}
+                </div>
+
+                <h3 style="font-size: 1.25rem;">
+                    {{.Title}}
+                </h3>
+
+                <p style="color: var(--accent); margin: 0.5rem 0; font-size: 0.9rem;">
+                    📍 {{.Location}}
+                </p>
+
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem;">
+                    {{.Description}}
+                </p>
+
+                <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                    <a
+                        href="/event/{{.ID.Hex}}"
+                        class="btn btn-secondary"
+                        style="flex: 1; text-align: center;"
+                    >
+                        Details
+                    </a>
+
+                    {{if eq $.Role "customer"}}
+                        <form
+                            action="/event/{{.ID.Hex}}/rsvp"
+                            method="POST"
+                            style="flex: 1; display: flex;"
+                        >
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                                style="width: 100%;"
+                            >
+                                RSVP
+                            </button>
+                        </form>
+                    {{end}}
+                </div>
             </div>
-        </div>
+        {{else}}
+            <p>No upcoming events are currently available.</p>
         {{end}}
     </div>
 </section>

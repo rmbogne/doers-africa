@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/mbogne/african-doers/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -27,6 +26,7 @@ type AuthSession struct {
 	ExpiresAt time.Time
 }
 
+// ----- VARIABLES --------------------------
 var DB *Database
 
 func InitStore() {
@@ -65,6 +65,27 @@ func InitStore() {
 }
 
 func setupPGSchema() {
+	schemaSetups := []struct {
+		name  string
+		setup func() error
+	}{
+		{name: "core", setup: setupCorePGSchema},
+		{name: "event RSVP", setup: setupEventRSVPSchema},
+		{name: "service request", setup: setupServiceRequestSchema},
+	}
+
+	for _, schema := range schemaSetups {
+		if err := schema.setup(); err != nil {
+			log.Printf(
+				"Warning: failed to set up %s PostgreSQL schema: %v",
+				schema.name,
+				err,
+			)
+		}
+	}
+}
+
+func setupCorePGSchema() error {
 	const query = `
 		CREATE TABLE IF NOT EXISTS doers (
 			id SERIAL PRIMARY KEY,
@@ -88,19 +109,13 @@ func setupPGSchema() {
 			password_hash VARCHAR(255) NOT NULL
 		);
 
-		CREATE TABLE IF NOT EXISTS rsvps (
-			event_id VARCHAR(255),
-			customer_id INT,
-			PRIMARY KEY (event_id, customer_id)
-		);
-
 		CREATE TABLE IF NOT EXISTS sessions (
-		token_hash VARCHAR(64) PRIMARY KEY,
-		role VARCHAR(20) NOT NULL
-	CHECK (role IN ('doer', 'customer')),
-		user_id INT NOT NULL,
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		expires_at TIMESTAMPTZ NOT NULL
+			token_hash VARCHAR(64) PRIMARY KEY,
+			role VARCHAR(20) NOT NULL
+				CHECK (role IN ('doer', 'customer')),
+			user_id INT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			expires_at TIMESTAMPTZ NOT NULL
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_sessions_expiration
@@ -108,11 +123,13 @@ func setupPGSchema() {
 
 		CREATE INDEX IF NOT EXISTS idx_sessions_user
 			ON sessions (role, user_id);
-		`
+	`
 
 	if _, err := DB.PG.Exec(query); err != nil {
-		log.Printf("Warning: failed to set up PostgreSQL tables: %v", err)
+		return fmt.Errorf("set up core PostgreSQL schema: %w", err)
 	}
+
+	return nil
 }
 
 // ----------------- DOER QUERIES (PG) -----------------
@@ -644,72 +661,6 @@ func (d *Database) ArchiveService(id string) {
 	); err != nil {
 		log.Printf("ArchiveService delete error: %v", err)
 	}
-}
-
-// ----------------- RSVP QUERIES (PG) -----------------
-
-func (d *Database) RecordRSVP(eventID string, customerID int) {
-	const query = `
-		INSERT INTO rsvps (event_id, customer_id)
-		VALUES ($1, $2)
-		ON CONFLICT (event_id, customer_id) DO NOTHING
-	`
-
-	if _, err := d.PG.Exec(query, eventID, customerID); err != nil {
-		log.Printf("RecordRSVP error: %v", err)
-	}
-}
-
-func (d *Database) GetCustomerRSVPs(customerID int) []models.Event {
-	rows, err := d.PG.Query(
-		`SELECT event_id FROM rsvps WHERE customer_id = $1`,
-		customerID,
-	)
-	if err != nil {
-		log.Printf("GetCustomerRSVPs query error: %v", err)
-		return []models.Event{}
-	}
-	defer rows.Close()
-
-	events := make([]models.Event, 0)
-
-	for rows.Next() {
-		var eventID string
-
-		if err := rows.Scan(&eventID); err != nil {
-			log.Printf("GetCustomerRSVPs scan error: %v", err)
-			continue
-		}
-
-		if event, ok := d.GetEvent(eventID); ok {
-			events = append(events, event)
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		log.Printf("GetCustomerRSVPs rows error: %v", err)
-	}
-
-	return events
-}
-
-func (d *Database) HasRSVPd(eventID string, customerID int) bool {
-	var exists bool
-
-	err := d.PG.QueryRow(
-		`
-			SELECT EXISTS (
-				SELECT 1
-				FROM rsvps
-				WHERE event_id = $1
-				  AND customer_id = $2
-			)
-		`,
-		eventID,
-		customerID,
-	).Scan(&exists)
-
-	return err == nil && exists
 }
 
 // ----------------- SESSION QUERIES (PG) -----------------

@@ -169,6 +169,16 @@ func main() {
 	)
 
 	mux.Handle(
+		"/customer/service-request/create",
+		middleware.RequireRole(
+			"customer",
+			http.HandlerFunc(
+				handlers.CustomerCreateServiceRequestHandler,
+			),
+		),
+	)
+
+	mux.Handle(
 		"/event/{id}/rsvp",
 		middleware.RequireRole(
 			"customer",

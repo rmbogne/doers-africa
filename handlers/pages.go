@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -17,82 +18,215 @@ type ServiceView struct {
 }
 
 type PageData struct {
-	Role         string
-	Events       []models.Event
-	Doers        []models.Doer
-	Services     []models.Service
-	ServiceViews []ServiceView
-	Event        models.Event
-	Service      models.Service
-	Doer         models.Doer
-	DoerName     string
-	HasRSVPd     bool
+	Role            string
+	Events          []models.Event
+	Doers           []models.Doer
+	Services        []models.Service
+	ServiceViews    []ServiceView
+	ServiceRequests []models.ServiceRequest
+	EventRSVPs      []models.EventRSVP
+
+	Event          models.Event
+	Service        models.Service
+	Doer           models.Doer
+	DoerName       string
+	HasRSVPd       bool
+	RequestCreated bool
 }
 
-func getRole(r *http.Request) string {
-	val := r.Context().Value(middleware.SessionKey)
-	if val != nil {
-		return val.(middleware.SessionInfo).Role
-	}
-	return ""
-}
-func getID(r *http.Request) int {
-	val := r.Context().Value(middleware.SessionKey)
-	if val != nil {
-		return val.(middleware.SessionInfo).ID
-	}
-	return 0
-}
-func render(w http.ResponseWriter, r *http.Request, tmpl string, data PageData) {
-	data.Role = getRole(r)
-	t, err := template.ParseFiles("templates/base.html", "templates/"+tmpl)
+func render(
+	w http.ResponseWriter,
+	r *http.Request,
+	templateName string,
+	data PageData,
+) {
+	role, _ := middleware.GetRoleAndID(r)
+	data.Role = role
+
+	parsedTemplate, err := template.ParseFiles(
+		"templates/base.html",
+		"templates/"+templateName,
+	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf(
+			"template parse error for %s: %v",
+			templateName,
+			err,
+		)
+
+		http.Error(
+			w,
+			"Unable to load page template",
+			http.StatusInternalServerError,
+		)
 		return
 	}
-	if err := t.Execute(w, data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	if err := parsedTemplate.ExecuteTemplate(
+		w,
+		"base.html",
+		data,
+	); err != nil {
+		log.Printf(
+			"template execution error for %s: %v",
+			templateName,
+			err,
+		)
+
+		http.Error(
+			w,
+			"Unable to render page",
+			http.StatusInternalServerError,
+		)
 	}
 }
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+
+func HomeHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
 	events := store.DB.GetAllEvents()
+
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].Date < events[j].Date
 	})
 
-	if len(events) > 5 {
-		events = events[:5]
+	const maximumHomeEvents = 5
+	if len(events) > maximumHomeEvents {
+		events = events[:maximumHomeEvents]
 	}
-	render(w, r, "home.html", PageData{Events: events})
+
+	render(
+		w,
+		r,
+		"home.html",
+		PageData{
+			Events: events,
+		},
+	)
 }
-func ProspectsHandler(w http.ResponseWriter, r *http.Request) {
+
+func ProspectsHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
 	doers := store.DB.GetAllDoers()
-	events := store.DB.GetAllEvents()
-	render(w, r, "prospects.html", PageData{Doers: doers, Events: events})
+	services := store.DB.GetAllServices(0, 50, "")
+	events := store.DB.GetUpcomingEvents(0, 50)
+
+	serviceViews := make([]ServiceView, 0, len(services))
+
+	for _, service := range services {
+		doer, found := store.DB.GetDoer(service.DoerID)
+		if !found {
+			continue
+		}
+
+		serviceViews = append(
+			serviceViews,
+			ServiceView{
+				Service: service,
+				Doer:    doer,
+			},
+		)
+	}
+
+	render(
+		w,
+		r,
+		"prospects.html",
+		PageData{
+			Doers:        doers,
+			Events:       events,
+			Services:     services,
+			ServiceViews: serviceViews,
+		},
+	)
 }
-func EventDetailHandler(w http.ResponseWriter, r *http.Request) {
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 3 {
+
+func EventDetailHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
+	eventID := strings.TrimSpace(
+		strings.TrimPrefix(
+			r.URL.Path,
+			"/event/",
+		),
+	)
+
+	if eventID == "" || strings.Contains(eventID, "/") {
 		http.NotFound(w, r)
 		return
 	}
-	id := pathParts[2]
-	event, exists := store.DB.GetEvent(id)
-	if !exists {
+
+	event, found := store.DB.GetEvent(eventID)
+	if !found {
 		http.NotFound(w, r)
 		return
 	}
-	doer, _ := store.DB.GetDoer(event.DoerID)
+
+	doer, found := store.DB.GetDoer(event.DoerID)
+	if !found {
+		http.Error(
+			w,
+			"Event provider not found",
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	role, customerID := middleware.GetRoleAndID(r)
+
 	hasRSVPd := false
-	if getRole(r) == "customer" {
-		cid := getID(r)
-		hasRSVPd = store.DB.HasRSVPd(id, cid)
+	if role == "customer" && customerID > 0 {
+		hasRSVPd = store.DB.HasRSVPd(
+			eventID,
+			customerID,
+		)
 	}
-	render(w, r, "event_detail.html", PageData{
-		Event:    event,
-		DoerName: doer.Name,
-		HasRSVPd: hasRSVPd,
-	})
+
+	render(
+		w,
+		r,
+		"event_detail.html",
+		PageData{
+			Event:    event,
+			Doer:     doer,
+			DoerName: doer.Name,
+			HasRSVPd: hasRSVPd,
+		},
+	)
 }
 
 func ServiceDetailHandler(
@@ -109,16 +243,17 @@ func ServiceDetailHandler(
 		return
 	}
 
-	serviceID := strings.TrimPrefix(
-		r.URL.Path,
-		"/service/",
+	serviceID := strings.TrimSpace(
+		strings.TrimPrefix(
+			r.URL.Path,
+			"/service/",
+		),
 	)
-	serviceID = strings.TrimSpace(serviceID)
 
-	if serviceID == "" {
+	if serviceID == "" || strings.Contains(serviceID, "/") {
 		http.Error(
 			w,
-			"Missing service ID",
+			"Missing or invalid service ID",
 			http.StatusBadRequest,
 		)
 		return
@@ -144,17 +279,18 @@ func ServiceDetailHandler(
 		return
 	}
 
-	role, _ := middleware.GetRoleAndID(r)
+	requestCreated :=
+		r.URL.Query().Get("request") == "created"
 
 	render(
 		w,
 		r,
 		"service_detail.html",
 		PageData{
-			Role:     role,
-			Service:  service,
-			Doer:     doer,
-			DoerName: doer.Name,
+			Service:        service,
+			Doer:           doer,
+			DoerName:       doer.Name,
+			RequestCreated: requestCreated,
 		},
 	)
 }
