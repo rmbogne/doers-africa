@@ -234,7 +234,9 @@ func main() {
 
 	// Auth must execute before RequireRole.
 	handler := middleware.Logger(
-		middleware.Auth(mux),
+		middleware.CSRF(
+			middleware.Auth(mux),
+		),
 	)
 
 	server := &http.Server{

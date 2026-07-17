@@ -1,59 +1,156 @@
+{{define "base"}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>African Doers</title>
-    <!-- Use Google Fonts (Outfit) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
 
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="csrf-token"
+        content="{{.CSRFToken}}"
+    >
+
+    <title>AfrikOpen Space</title>
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+    <script
+        src="/static/js/security.js"
+        defer
+    ></script>
+</head>
+
+<body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/" class="logo">African Doers</a>
-            <ul class="nav-links">
-                <li><a href="/">Home</a></li>
-                <li><a href="/prospects">Explore</a></li>
-                {{if eq .Role "doer"}}
-                    <a href="/doer/dashboard">Dashboard</a>
-                    <a href="/notifications">Notifications</a>
+            <a href="/" class="logo">
+                AfrikOpen Space
+            </a>
 
-                    <form
-                        action="/logout"
-                        method="POST"
-                        class="logout-form"
-                    >
-                        <button
-                            type="submit"
-                            class="logout-button"
+            <ul class="nav-links">
+                <li>
+                    <a href="/">Home</a>
+                </li>
+
+                <li>
+                    <a href="/prospects">Explore</a>
+                </li>
+
+                {{if eq .Role "doer"}}
+                    <li>
+                        <a href="/doer/dashboard">
+                            Dashboard
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="/notifications">
+                            Notifications
+                        </a>
+                    </li>
+
+                    <li>
+                        <form
+                            action="/logout"
+                            method="POST"
+                            style="display: inline; margin: 0;"
                         >
-                            Logout
-                        </button>
-                    </form>
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{.CSRFToken}}"
+                            >
+
+                            <button
+                                type="submit"
+                                style="
+                                    padding: 0;
+                                    border: 0;
+                                    background: transparent;
+                                    color: var(--text-main);
+                                    font: inherit;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                "
+                            >
+                                Logout
+                            </button>
+                        </form>
+                    </li>
 
                 {{else if eq .Role "customer"}}
-                    <a href="/customer/dashboard">Dashboard</a>
-                    <a href="/notifications">Notifications</a>
+                    <li>
+                        <a href="/customer/dashboard">
+                            Dashboard
+                        </a>
+                    </li>
 
-                    <form
-                        action="/logout"
-                        method="POST"
-                        class="logout-form"
-                    >
-                        <button
-                            type="submit"
-                            class="logout-button"
+                    <li>
+                        <a href="/notifications">
+                            Notifications
+                        </a>
+                    </li>
+
+                    <li>
+                        <form
+                            action="/logout"
+                            method="POST"
+                            style="display: inline; margin: 0;"
                         >
-                            Logout
-                        </button>
-                    </form>
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{.CSRFToken}}"
+                            >
+
+                            <button
+                                type="submit"
+                                style="
+                                    padding: 0;
+                                    border: 0;
+                                    background: transparent;
+                                    color: var(--text-main);
+                                    font: inherit;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                "
+                            >
+                                Logout
+                            </button>
+                        </form>
+                    </li>
+
                 {{else}}
-                    <li><a href="/login">Login</a></li>
-                    <li><a href="/register">Register</a></li>
+                    <li>
+                        <a href="/login">Login</a>
+                    </li>
+
+                    <li>
+                        <a href="/register">Register</a>
+                    </li>
                 {{end}}
             </ul>
         </div>
@@ -65,10 +162,19 @@
 
     <footer class="footer">
         <div class="footer-content">
-            <p>&copy; 2026 African Doers. All rights reserved.</p>
-            <p class="disclaimer"><strong>Disclaimer:</strong> African Doers is a platform connecting event organizers and service providers. We act as a conduit and are not liable for the quality of services rendered nor any damages incurred from events. Users assume all responsibility when engaging providers found on this platform.</p>
+            <p>
+                &copy; 2026 AfrikOpen Space. All rights reserved.
+            </p>
+
+            <p class="disclaimer">
+                AfrikOpen Space is a platform connecting event organizers,
+                service providers, and customers. We act as a conduit and are
+                not liable for the quality of services rendered or damages
+                incurred from events. Users assume responsibility when
+                engaging providers found on the platform.
+            </p>
         </div>
     </footer>
-    <script src="/static/js/main.js"></script>
 </body>
 </html>
+{{end}}

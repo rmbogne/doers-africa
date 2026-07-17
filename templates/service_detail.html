@@ -1,15 +1,15 @@
 {{define "content"}}
 
-{{if .RequestCreated}}
+{{if or .RequestCreated .RequestReplayed}}
 <div
-    id="request-success-popup"
-    role="alert"
+    id="request-confirmation"
+    role="status"
     style="
         position: fixed;
         top: 1.5rem;
         right: 1.5rem;
         z-index: 1000;
-        max-width: 420px;
+        max-width: 430px;
         padding: 1rem 1.25rem;
         background: #166534;
         color: white;
@@ -17,23 +17,30 @@
         box-shadow: 0 10px 30px rgba(0,0,0,0.35);
     "
 >
-    <strong>Request submitted successfully.</strong>
-
-    <p style="margin: 0.35rem 0 0;">
-        The provider will review your service request.
-    </p>
+    {{if .RequestCreated}}
+        <strong>Request submitted successfully.</strong>
+        <p style="margin: 0.35rem 0 0;">
+            The provider will review your service request.
+        </p>
+    {{else}}
+        <strong>Request already received.</strong>
+        <p style="margin: 0.35rem 0 0;">
+            The repeated submission was detected, so no duplicate request
+            was created.
+        </p>
+    {{end}}
 </div>
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        const popup = document.getElementById(
-            "request-success-popup"
+        const confirmation = document.getElementById(
+            "request-confirmation"
         );
 
-        if (popup) {
+        if (confirmation) {
             setTimeout(function () {
-                popup.remove();
-            }, 5000);
+                confirmation.remove();
+            }, 6000);
         }
 
         history.replaceState(
@@ -47,7 +54,7 @@
 
 <div
     style="
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
         background: var(--bg-card);
         padding: 3rem;
@@ -61,11 +68,12 @@
             justify-content: space-between;
             align-items: flex-start;
             gap: 2rem;
+            flex-wrap: wrap;
             margin-bottom: 2rem;
         "
     >
-        <div>
-            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">
+        <div style="flex: 1; min-width: 260px;">
+            <h1 style="font-size: 2.5rem; margin: 0 0 0.5rem;">
                 {{.Service.Title}}
             </h1>
 
@@ -74,30 +82,55 @@
                     color: var(--accent);
                     font-size: 1.5rem;
                     font-weight: bold;
-                    margin-bottom: 1rem;
+                    margin: 0 0 1rem;
                 "
             >
                 ${{.Service.Price}}
             </p>
 
-            <p class="text-muted" style="margin-top: 0.5rem;">
+            <p class="text-muted" style="margin: 0;">
                 Provided by <strong>{{.DoerName}}</strong>
             </p>
         </div>
 
-        <div style="min-width: 280px;">
+        <div style="flex: 0 1 340px; width: 100%;">
             {{if eq .Role "customer"}}
                 <form
+                    id="service-request-form"
                     action="/customer/service-request/create"
                     method="POST"
+                    style="
+                        display: grid;
+                        gap: 1rem;
+                        padding: 1.25rem;
+                        background: rgba(255,255,255,0.04);
+                        border-radius: 0.75rem;
+                    "
+                    onsubmit="
+                        const button =
+                            this.querySelector('button[type=submit]');
+                        button.disabled = true;
+                        button.textContent = 'Submitting...';
+                    "
                 >
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{$.CSRFToken}}"
+                            >
                     <input
                         type="hidden"
                         name="service_id"
                         value="{{.Service.ID.Hex}}"
                     >
 
-                    <div style="margin-bottom: 1rem;">
+                    <input
+                        type="hidden"
+                        name="idempotency_token"
+                        value="{{.RequestSubmissionToken}}"
+                    >
+
+                    <div>
                         <label for="requested_date">
                             Requested date
                         </label>
@@ -115,7 +148,7 @@
                         >
                     </div>
 
-                    <div style="margin-bottom: 1rem;">
+                    <div>
                         <label for="message">
                             Describe what you need
                         </label>
@@ -129,7 +162,7 @@
                             style="
                                 display: block;
                                 width: 100%;
-                                min-height: 120px;
+                                min-height: 130px;
                                 margin-top: 0.5rem;
                             "
                         ></textarea>
@@ -138,7 +171,6 @@
                     <button
                         type="submit"
                         class="btn btn-primary"
-                        style="width: 100%;"
                     >
                         Place Request
                     </button>
@@ -151,6 +183,7 @@
                         padding: 1rem 2rem;
                         border-radius: 9999px;
                         font-weight: bold;
+                        text-align: center;
                     "
                 >
                     Doers cannot request services
@@ -162,7 +195,6 @@
                     class="btn btn-primary"
                     style="
                         display: block;
-                        font-size: 1.1rem;
                         padding: 1rem 2rem;
                         text-align: center;
                     "
@@ -173,15 +205,15 @@
         </div>
     </div>
 
-    <h3
+    <h2
         style="
             margin-top: 3rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         "
     >
         Service Details
-    </h3>
+    </h2>
 
     <p
         style="
@@ -201,9 +233,9 @@
             border-radius: 0.5rem;
         "
     >
-        <h4 style="margin-bottom: 1rem;">
+        <h3 style="margin: 0 0 1rem;">
             Provider Information
-        </h4>
+        </h3>
 
         <p>
             <strong>Email:</strong> {{.Doer.Email}}

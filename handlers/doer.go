@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/mbogne/african-doers/internal/mongoid"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
@@ -30,10 +32,11 @@ func DoerDashboardHandler(
 		return
 	}
 
-	serviceRequests, err := store.DB.GetServiceRequestsByDoer(
-		r.Context(),
-		doerID,
-	)
+	serviceRequests, err :=
+		store.DB.GetServiceRequestsByDoer(
+			r.Context(),
+			doerID,
+		)
 	if err != nil {
 		log.Printf(
 			"GetServiceRequestsByDoer error: %v",
@@ -47,10 +50,11 @@ func DoerDashboardHandler(
 		return
 	}
 
-	eventRSVPs, err := store.DB.GetEventRSVPsByDoer(
-		r.Context(),
-		doerID,
-	)
+	eventRSVPs, err :=
+		store.DB.GetEventRSVPsByDoer(
+			r.Context(),
+			doerID,
+		)
 	if err != nil {
 		log.Printf(
 			"GetEventRSVPsByDoer error: %v",
@@ -69,8 +73,12 @@ func DoerDashboardHandler(
 		r,
 		"doer_dashboard.html",
 		PageData{
-			Events:          store.DB.GetEventsByDoer(doerID),
-			Services:        store.DB.GetServicesByDoer(doerID),
+			Events: store.DB.GetEventsByDoer(
+				doerID,
+			),
+			Services: store.DB.GetServicesByDoer(
+				doerID,
+			),
 			ServiceRequests: serviceRequests,
 			EventRSVPs:      eventRSVPs,
 		},
@@ -88,7 +96,12 @@ func DoerNewEventHandler(
 
 	switch r.Method {
 	case http.MethodGet:
-		render(w, r, "new_event.html", PageData{})
+		render(
+			w,
+			r,
+			"new_event.html",
+			PageData{},
+		)
 		return
 
 	case http.MethodPost:
@@ -101,6 +114,8 @@ func DoerNewEventHandler(
 			return
 		}
 
+		// Ownership is derived exclusively from the authenticated session.
+		// No doer_id form value is accepted.
 		event := models.Event{
 			Title: strings.TrimSpace(
 				r.FormValue("title"),
@@ -147,14 +162,10 @@ func DoerNewEventHandler(
 		return
 
 	default:
-		w.Header().Set(
-			"Allow",
-			http.MethodGet+", "+http.MethodPost,
-		)
-		http.Error(
+		allowDoerMethods(
 			w,
-			"Method not allowed",
-			http.StatusMethodNotAllowed,
+			http.MethodGet,
+			http.MethodPost,
 		)
 	}
 }
@@ -170,7 +181,12 @@ func DoerNewServiceHandler(
 
 	switch r.Method {
 	case http.MethodGet:
-		render(w, r, "new_service.html", PageData{})
+		render(
+			w,
+			r,
+			"new_service.html",
+			PageData{},
+		)
 		return
 
 	case http.MethodPost:
@@ -184,7 +200,9 @@ func DoerNewServiceHandler(
 		}
 
 		price, err := strconv.Atoi(
-			strings.TrimSpace(r.FormValue("price")),
+			strings.TrimSpace(
+				r.FormValue("price"),
+			),
 		)
 		if err != nil || price < 0 {
 			http.Error(
@@ -195,6 +213,7 @@ func DoerNewServiceHandler(
 			return
 		}
 
+		// Ownership is derived exclusively from the authenticated session.
 		service := models.Service{
 			Title: strings.TrimSpace(
 				r.FormValue("title"),
@@ -216,7 +235,9 @@ func DoerNewServiceHandler(
 			return
 		}
 
-		if _, err := store.DB.AddService(service); err != nil {
+		if _, err := store.DB.AddService(
+			service,
+		); err != nil {
 			log.Printf("AddService error: %v", err)
 			http.Error(
 				w,
@@ -235,14 +256,10 @@ func DoerNewServiceHandler(
 		return
 
 	default:
-		w.Header().Set(
-			"Allow",
-			http.MethodGet+", "+http.MethodPost,
-		)
-		http.Error(
+		allowDoerMethods(
 			w,
-			"Method not allowed",
-			http.StatusMethodNotAllowed,
+			http.MethodGet,
+			http.MethodPost,
 		)
 	}
 }
@@ -256,40 +273,35 @@ func DoerEditEventHandler(
 		return
 	}
 
-	eventID := requestResourceID(
+	eventID, err := requestResourceID(
 		r,
 		"/doer/event/edit/",
 	)
-	if eventID == "" {
+	if err != nil {
 		http.Error(
 			w,
-			"Missing event ID",
+			"Invalid event ID",
 			http.StatusBadRequest,
-		)
-		return
-	}
-
-	event, found := store.DB.GetEvent(eventID)
-	if !found {
-		http.Error(
-			w,
-			"Event not found",
-			http.StatusNotFound,
-		)
-		return
-	}
-
-	if event.DoerID != doerID {
-		http.Error(
-			w,
-			"Forbidden",
-			http.StatusForbidden,
 		)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
+		event, err := store.DB.GetEventOwned(
+			r.Context(),
+			eventID,
+			doerID,
+		)
+		if err != nil {
+			handleOwnedObjectError(
+				w,
+				"load event",
+				err,
+			)
+			return
+		}
+
 		render(
 			w,
 			r,
@@ -310,18 +322,20 @@ func DoerEditEventHandler(
 			return
 		}
 
-		event.Title = strings.TrimSpace(
-			r.FormValue("title"),
-		)
-		event.Description = strings.TrimSpace(
-			r.FormValue("description"),
-		)
-		event.Date = strings.TrimSpace(
-			r.FormValue("date"),
-		)
-		event.Location = strings.TrimSpace(
-			r.FormValue("location"),
-		)
+		event := models.Event{
+			Title: strings.TrimSpace(
+				r.FormValue("title"),
+			),
+			Description: strings.TrimSpace(
+				r.FormValue("description"),
+			),
+			Date: strings.TrimSpace(
+				r.FormValue("date"),
+			),
+			Location: strings.TrimSpace(
+				r.FormValue("location"),
+			),
+		}
 
 		if event.Title == "" ||
 			event.Date == "" ||
@@ -334,15 +348,16 @@ func DoerEditEventHandler(
 			return
 		}
 
-		if err := store.DB.UpdateEvent(
+		if err := store.DB.UpdateEventOwned(
+			r.Context(),
 			eventID,
+			doerID,
 			event,
 		); err != nil {
-			log.Printf("UpdateEvent error: %v", err)
-			http.Error(
+			handleOwnedObjectError(
 				w,
-				"Unable to update event",
-				http.StatusInternalServerError,
+				"update event",
+				err,
 			)
 			return
 		}
@@ -356,14 +371,10 @@ func DoerEditEventHandler(
 		return
 
 	default:
-		w.Header().Set(
-			"Allow",
-			http.MethodGet+", "+http.MethodPost,
-		)
-		http.Error(
+		allowDoerMethods(
 			w,
-			"Method not allowed",
-			http.StatusMethodNotAllowed,
+			http.MethodGet,
+			http.MethodPost,
 		)
 	}
 }
@@ -373,12 +384,7 @@ func DoerArchiveEventHandler(
 	r *http.Request,
 ) {
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(
-			w,
-			"Method not allowed",
-			http.StatusMethodNotAllowed,
-		)
+		allowDoerMethods(w, http.MethodPost)
 		return
 	}
 
@@ -387,39 +393,31 @@ func DoerArchiveEventHandler(
 		return
 	}
 
-	eventID := requestResourceID(
+	eventID, err := requestResourceID(
 		r,
 		"/doer/event/archive/",
 	)
-	if eventID == "" {
+	if err != nil {
 		http.Error(
 			w,
-			"Missing event ID",
+			"Invalid event ID",
 			http.StatusBadRequest,
 		)
 		return
 	}
 
-	event, found := store.DB.GetEvent(eventID)
-	if !found {
-		http.Error(
+	if err := store.DB.ArchiveEventOwned(
+		r.Context(),
+		eventID,
+		doerID,
+	); err != nil {
+		handleOwnedObjectError(
 			w,
-			"Event not found",
-			http.StatusNotFound,
+			"archive event",
+			err,
 		)
 		return
 	}
-
-	if event.DoerID != doerID {
-		http.Error(
-			w,
-			"Forbidden",
-			http.StatusForbidden,
-		)
-		return
-	}
-
-	store.DB.ArchiveEvent(eventID)
 
 	http.Redirect(
 		w,
@@ -434,12 +432,7 @@ func DoerArchiveServiceHandler(
 	r *http.Request,
 ) {
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(
-			w,
-			"Method not allowed",
-			http.StatusMethodNotAllowed,
-		)
+		allowDoerMethods(w, http.MethodPost)
 		return
 	}
 
@@ -448,39 +441,31 @@ func DoerArchiveServiceHandler(
 		return
 	}
 
-	serviceID := requestResourceID(
+	serviceID, err := requestResourceID(
 		r,
 		"/doer/service/archive/",
 	)
-	if serviceID == "" {
+	if err != nil {
 		http.Error(
 			w,
-			"Missing service ID",
+			"Invalid service ID",
 			http.StatusBadRequest,
 		)
 		return
 	}
 
-	service, found := store.DB.GetService(serviceID)
-	if !found {
-		http.Error(
+	if err := store.DB.ArchiveServiceOwned(
+		r.Context(),
+		serviceID,
+		doerID,
+	); err != nil {
+		handleOwnedObjectError(
 			w,
-			"Service not found",
-			http.StatusNotFound,
+			"archive service",
+			err,
 		)
 		return
 	}
-
-	if service.DoerID != doerID {
-		http.Error(
-			w,
-			"Forbidden",
-			http.StatusForbidden,
-		)
-		return
-	}
-
-	store.DB.ArchiveService(serviceID)
 
 	http.Redirect(
 		w,
@@ -496,7 +481,7 @@ func authenticatedDoerID(
 ) (int, bool) {
 	role, doerID := middleware.GetRoleAndID(r)
 
-	if role != "doer" || doerID == 0 {
+	if role != "doer" || doerID <= 0 {
 		http.Error(
 			w,
 			"Unauthorized",
@@ -508,18 +493,85 @@ func authenticatedDoerID(
 	return doerID, true
 }
 
+func handleOwnedObjectError(
+	w http.ResponseWriter,
+	action string,
+	err error,
+) {
+	switch {
+	case errors.Is(
+		err,
+		store.ErrInvalidOwnedObjectID,
+	):
+		http.Error(
+			w,
+			"Invalid object ID",
+			http.StatusBadRequest,
+		)
+
+	case errors.Is(
+		err,
+		store.ErrOwnedObjectNotFound,
+	):
+		// Return one response for both nonexistent and foreign-owned objects.
+		http.Error(
+			w,
+			"Object not found or action is not permitted",
+			http.StatusNotFound,
+		)
+
+	default:
+		log.Printf(
+			"Unable to %s: %v",
+			action,
+			err,
+		)
+		http.Error(
+			w,
+			"Unable to process request",
+			http.StatusInternalServerError,
+		)
+	}
+}
+
+func allowDoerMethods(
+	w http.ResponseWriter,
+	methods ...string,
+) {
+	w.Header().Set(
+		"Allow",
+		strings.Join(methods, ", "),
+	)
+	http.Error(
+		w,
+		"Method not allowed",
+		http.StatusMethodNotAllowed,
+	)
+}
+
 func requestResourceID(
 	r *http.Request,
 	prefix string,
-) string {
-	if queryID := strings.TrimSpace(
-		r.URL.Query().Get("id"),
-	); queryID != "" {
-		return queryID
+) (string, error) {
+	rawID := strings.TrimSpace(
+		r.FormValue("object_id"),
+	)
+
+	if rawID == "" {
+		rawID = strings.TrimSpace(
+			r.URL.Query().Get("id"),
+		)
 	}
 
-	return strings.Trim(
-		strings.TrimPrefix(r.URL.Path, prefix),
-		"/",
-	)
+	if rawID == "" {
+		rawID = strings.Trim(
+			strings.TrimPrefix(
+				r.URL.Path,
+				prefix,
+			),
+			"/",
+		)
+	}
+
+	return mongoid.Normalize(rawID)
 }

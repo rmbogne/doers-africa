@@ -301,6 +301,11 @@
                                     style="margin: 0;"
                                     onsubmit="return confirm('Cancel this service request?');"
                                 >
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{$.CSRFToken}}"
+                            >
                                     <input
                                         type="hidden"
                                         name="request_id"

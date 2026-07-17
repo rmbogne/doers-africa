@@ -72,6 +72,10 @@ func setupPGSchema() {
 		{name: "core", setup: setupCorePGSchema},
 		{name: "event RSVP", setup: setupEventRSVPSchema},
 		{name: "service request", setup: setupServiceRequestSchema},
+		{
+			name:  "service request idempotency",
+			setup: setupServiceRequestIdempotencySchema,
+		},
 		{name: "notification", setup: setupNotificationSchema},
 	}
 

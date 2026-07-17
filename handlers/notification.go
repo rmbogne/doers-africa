@@ -18,6 +18,7 @@ type notificationPageData struct {
 	Role          string
 	Notifications []models.Notification
 	UnreadCount   int
+	CSRFToken     string
 }
 
 func NotificationsHandler(
@@ -81,6 +82,7 @@ func NotificationsHandler(
 			Role:          role,
 			Notifications: notifications,
 			UnreadCount:   unreadCount,
+			CSRFToken:     middleware.CSRFToken(r),
 		},
 	)
 }

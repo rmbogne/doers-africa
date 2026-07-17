@@ -30,6 +30,11 @@
                 method="POST"
                 style="margin: 0;"
             >
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{$.CSRFToken}}"
+                            >
                 <button
                     type="submit"
                     class="btn btn-secondary"
@@ -130,6 +135,11 @@
                             method="POST"
                             style="margin: 0;"
                         >
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{$.CSRFToken}}"
+                            >
                             <input
                                 type="hidden"
                                 name="notification_id"

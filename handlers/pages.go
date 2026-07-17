@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"html/template"
 	"log"
 	"net/http"
@@ -29,11 +30,15 @@ type PageData struct {
 
 	Event          models.Event
 	Service        models.Service
-	Doer           models.Doer
 	ServiceRequest models.ServiceRequest
+	Doer           models.Doer
 	DoerName       string
 	HasRSVPd       bool
-	RequestCreated bool
+
+	RequestCreated         bool
+	RequestReplayed        bool
+	RequestSubmissionToken string
+	CSRFToken              string
 }
 
 func render(
@@ -44,6 +49,7 @@ func render(
 ) {
 	role, _ := middleware.GetRoleAndID(r)
 	data.Role = role
+	data.CSRFToken = middleware.CSRFToken(r)
 
 	parsedTemplate, err := template.ParseFiles(
 		"templates/base.html",
@@ -55,7 +61,6 @@ func render(
 			templateName,
 			err,
 		)
-
 		http.Error(
 			w,
 			"Unable to load page template",
@@ -64,9 +69,16 @@ func render(
 		return
 	}
 
+	baseTemplateName := "base.html"
+	if parsedTemplate.Lookup("base") != nil {
+		baseTemplateName = "base"
+	}
+
+	var output bytes.Buffer
+
 	if err := parsedTemplate.ExecuteTemplate(
-		w,
-		"base.html",
+		&output,
+		baseTemplateName,
 		data,
 	); err != nil {
 		log.Printf(
@@ -74,11 +86,24 @@ func render(
 			templateName,
 			err,
 		)
-
 		http.Error(
 			w,
 			"Unable to render page",
 			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.Header().Set(
+		"Content-Type",
+		"text/html; charset=utf-8",
+	)
+
+	if _, err := output.WriteTo(w); err != nil {
+		log.Printf(
+			"template response error for %s: %v",
+			templateName,
+			err,
 		)
 	}
 }
@@ -87,6 +112,11 @@ func HomeHandler(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(
@@ -132,14 +162,29 @@ func ProspectsHandler(
 		return
 	}
 
-	doers := store.DB.GetAllDoers()
-	services := store.DB.GetAllServices(0, 50, "")
-	events := store.DB.GetUpcomingEvents(0, 50)
+	services := store.DB.GetAvailableServices(
+		r.Context(),
+		0,
+		100,
+		"",
+	)
 
-	serviceViews := make([]ServiceView, 0, len(services))
+	events := store.DB.GetVisibleUpcomingEvents(
+		r.Context(),
+		0,
+		100,
+	)
+
+	serviceViews := make(
+		[]ServiceView,
+		0,
+		len(services),
+	)
 
 	for _, service := range services {
-		doer, found := store.DB.GetDoer(service.DoerID)
+		doer, found := store.DB.GetDoer(
+			service.DoerID,
+		)
 		if !found {
 			continue
 		}
@@ -158,7 +203,6 @@ func ProspectsHandler(
 		r,
 		"prospects.html",
 		PageData{
-			Doers:        doers,
 			Events:       events,
 			Services:     services,
 			ServiceViews: serviceViews,
@@ -187,7 +231,8 @@ func EventDetailHandler(
 		),
 	)
 
-	if eventID == "" || strings.Contains(eventID, "/") {
+	if eventID == "" ||
+		strings.Contains(eventID, "/") {
 		http.NotFound(w, r)
 		return
 	}
@@ -208,10 +253,12 @@ func EventDetailHandler(
 		return
 	}
 
-	role, customerID := middleware.GetRoleAndID(r)
+	role, customerID :=
+		middleware.GetRoleAndID(r)
 
 	hasRSVPd := false
-	if role == "customer" && customerID > 0 {
+	if role == "customer" &&
+		customerID > 0 {
 		hasRSVPd = store.DB.HasRSVPd(
 			eventID,
 			customerID,
@@ -252,7 +299,8 @@ func ServiceDetailHandler(
 		),
 	)
 
-	if serviceID == "" || strings.Contains(serviceID, "/") {
+	if serviceID == "" ||
+		strings.Contains(serviceID, "/") {
 		http.Error(
 			w,
 			"Missing or invalid service ID",
@@ -281,18 +329,49 @@ func ServiceDetailHandler(
 		return
 	}
 
-	requestCreated :=
-		r.URL.Query().Get("request") == "created"
+	role, userID := middleware.GetRoleAndID(r)
+
+	requestSubmissionToken := ""
+	if role == "customer" && userID > 0 {
+		var err error
+
+		requestSubmissionToken, err =
+			store.DB.IssueServiceRequestSubmissionToken(
+				r.Context(),
+				userID,
+				serviceID,
+			)
+		if err != nil {
+			log.Printf(
+				"IssueServiceRequestSubmissionToken error: %v",
+				err,
+			)
+			http.Error(
+				w,
+				"Unable to prepare service request form",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+	}
+
+	requestResult := strings.ToLower(
+		strings.TrimSpace(
+			r.URL.Query().Get("request"),
+		),
+	)
 
 	render(
 		w,
 		r,
 		"service_detail.html",
 		PageData{
-			Service:        service,
-			Doer:           doer,
-			DoerName:       doer.Name,
-			RequestCreated: requestCreated,
+			Service:                service,
+			Doer:                   doer,
+			DoerName:               doer.Name,
+			RequestCreated:         requestResult == "created",
+			RequestReplayed:        requestResult == "replayed",
+			RequestSubmissionToken: requestSubmissionToken,
 		},
 	)
 }

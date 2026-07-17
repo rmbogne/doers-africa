@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
@@ -30,8 +31,17 @@ func CustomerCreateServiceRequestHandler(
 	if role != "customer" || customerID == 0 {
 		http.Error(
 			w,
-			"Authentication required",
+			"Unauthorized",
 			http.StatusUnauthorized,
+		)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(
+			w,
+			"Invalid service request",
+			http.StatusBadRequest,
 		)
 		return
 	}
@@ -39,26 +49,42 @@ func CustomerCreateServiceRequestHandler(
 	serviceID := strings.TrimSpace(
 		r.FormValue("service_id"),
 	)
+	idempotencyToken := strings.TrimSpace(
+		r.FormValue("idempotency_token"),
+	)
 	message := strings.TrimSpace(
 		r.FormValue("message"),
 	)
-	requestedDateValue := strings.TrimSpace(
+	requestedDateText := strings.TrimSpace(
 		r.FormValue("requested_date"),
 	)
 
-	if serviceID == "" {
+	if serviceID == "" ||
+		idempotencyToken == "" {
 		http.Error(
 			w,
-			"Service ID is required",
+			"Missing service request information",
 			http.StatusBadRequest,
 		)
 		return
 	}
 
-	if len(message) < 10 || len(message) > 2000 {
+	messageLength := utf8.RuneCountInString(message)
+	if messageLength < 10 || messageLength > 2000 {
 		http.Error(
 			w,
-			"Message must contain between 10 and 2000 characters",
+			"Request description must contain between 10 and 2000 characters",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if requestedDateText == "" ||
+		requestedDateText <
+			time.Now().Format("2006-01-02") {
+		http.Error(
+			w,
+			"Requested date must be today or later",
 			http.StatusBadRequest,
 		)
 		return
@@ -66,23 +92,12 @@ func CustomerCreateServiceRequestHandler(
 
 	requestedDate, err := time.Parse(
 		"2006-01-02",
-		requestedDateValue,
+		requestedDateText,
 	)
 	if err != nil {
 		http.Error(
 			w,
 			"Invalid requested date",
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	if requestedDate.Before(
-		time.Now().Truncate(24 * time.Hour),
-	) {
-		http.Error(
-			w,
-			"Requested date cannot be in the past",
 			http.StatusBadRequest,
 		)
 		return
@@ -98,64 +113,101 @@ func CustomerCreateServiceRequestHandler(
 		return
 	}
 
+	if service.DoerID <= 0 {
+		http.Error(
+			w,
+			"Service provider not found",
+			http.StatusNotFound,
+		)
+		return
+	}
+
 	serviceRequest := models.ServiceRequest{
 		ServiceID:     serviceID,
-		ServiceTitle:  service.Title,
+		ServiceTitle:  strings.TrimSpace(service.Title),
 		ServicePrice:  service.Price,
 		CustomerID:    customerID,
 		DoerID:        service.DoerID,
 		Message:       message,
 		RequestedDate: requestedDate,
-		Status:        models.ServiceRequestStatusPending,
 	}
 
-	requestID, err := store.DB.CreateServiceRequest(
-		r.Context(),
-		serviceRequest,
-	)
+	requestID, replayed, err :=
+		store.DB.CreateServiceRequestIdempotent(
+			r.Context(),
+			serviceRequest,
+			idempotencyToken,
+		)
 	if err != nil {
-		switch {
-		case errors.Is(
-			err,
-			store.ErrActiveServiceRequestExists,
-		):
-			http.Error(
-				w,
-				"You already have an active request for this service",
-				http.StatusConflict,
-			)
-
-		default:
-			log.Printf(
-				"CreateServiceRequest error: %v",
-				err,
-			)
-
-			http.Error(
-				w,
-				"Unable to place service request",
-				http.StatusInternalServerError,
-			)
-		}
-
+		handleIdempotentRequestError(w, err)
 		return
 	}
 
 	log.Printf(
-		"Created service request %d for customer %d and service %s",
+		"Service request %d processed for customer %d; replayed=%t",
 		requestID,
 		customerID,
-		serviceID,
+		replayed,
 	)
 
-	redirectURL := "/service/" +
-		serviceID +
-		"?request=created"
+	requestResult := "created"
+	if replayed {
+		requestResult = "replayed"
+	}
 
 	http.Redirect(
 		w,
 		r,
-		redirectURL,
+		"/service/"+serviceID+
+			"?request="+requestResult,
 		http.StatusSeeOther,
 	)
+}
+
+func handleIdempotentRequestError(
+	w http.ResponseWriter,
+	err error,
+) {
+	switch {
+	case errors.Is(
+		err,
+		store.ErrIdempotencyTokenInvalid,
+	):
+		http.Error(
+			w,
+			"This service-request form is no longer valid. Reload the service page and try again.",
+			http.StatusConflict,
+		)
+
+	case errors.Is(
+		err,
+		store.ErrIdempotencyTokenExpired,
+	):
+		http.Error(
+			w,
+			"This service-request form expired. Reload the service page and try again.",
+			http.StatusConflict,
+		)
+
+	case errors.Is(
+		err,
+		store.ErrIdempotencyConflict,
+	):
+		http.Error(
+			w,
+			"This submission was already processed with different request details.",
+			http.StatusConflict,
+		)
+
+	default:
+		log.Printf(
+			"CreateServiceRequestIdempotent error: %v",
+			err,
+		)
+		http.Error(
+			w,
+			"Unable to create service request",
+			http.StatusInternalServerError,
+		)
+	}
 }
