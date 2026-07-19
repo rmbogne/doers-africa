@@ -16,3 +16,6 @@ vendor/
 *.swp
 *.swo
 doers-africa.code-workspace
+
+# User-uploaded images
+static/uploads/

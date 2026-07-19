@@ -1,25 +1,172 @@
 {{define "content"}}
-<div class="form-container">
-    <h2>Edit Event</h2>
-    <form action="/doer/event/edit/{{.Event.ID.Hex}}" method="POST">
-        <div class="form-group">
-            <label for="title">Event Title</label>
-            <input type="text" id="title" name="title" class="form-control" required value="{{.Event.Title}}">
+
+<div
+    id="upload-feedback"
+    role="alert"
+    tabindex="-1"
+    {{if not .UploadError}}hidden{{end}}
+    style="
+        position: fixed;
+        top: 1.5rem;
+        right: 1.5rem;
+        z-index: 1100;
+        width: min(430px, calc(100vw - 3rem));
+        padding: 1rem 1.25rem;
+        background: #991b1b;
+        color: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    "
+>
+    <div
+        style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        "
+    >
+        <div>
+            <strong>Image upload failed.</strong>
+
+            <p
+                data-upload-message
+                style="margin: 0.35rem 0 0;"
+            >
+                {{.UploadError}}
+            </p>
         </div>
-        <div class="form-group">
-            <label for="description">Event Description</label>
-            <textarea id="description" name="description" class="form-control" rows="4" required>{{.Event.Description}}</textarea>
-        </div>
-        <div class="form-group">
-            <label for="date">Event Date</label>
-            <input type="date" id="date" name="date" class="form-control" required value="{{.Event.Date}}">
-        </div>
-        <div class="form-group">
-            <label for="location">Location</label>
-            <input type="text" id="location" name="location" class="form-control" required value="{{.Event.Location}}">
-        </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%;">Update Event</button>
-    </form>
-    <a href="/doer/dashboard" style="display:block; text-align:center; margin-top:1rem; color:var(--text-muted);">Cancel</a>
+
+        <button
+            type="button"
+            data-upload-dismiss
+            aria-label="Close upload message"
+            style="
+                border: 0;
+                background: transparent;
+                color: white;
+                font-size: 1.25rem;
+                cursor: pointer;
+            "
+        >
+            &times;
+        </button>
+    </div>
 </div>
+
+<section
+    style="
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 2rem;
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+    "
+>
+    <h1 style="margin-top: 0;">Edit Event</h1>
+
+    {{if .Event.ImageURL}}
+        <img
+            src="{{.Event.ImageURL}}"
+            alt="{{.Event.Title}}"
+            style="
+                width: 100%;
+                max-height: 360px;
+                margin-bottom: 1.25rem;
+                border-radius: 0.75rem;
+                object-fit: cover;
+            "
+        >
+    {{end}}
+
+    <form
+        action="/doer/event/edit?id={{.Event.ID.Hex}}"
+        method="POST"
+        enctype="multipart/form-data"
+        data-image-upload-form
+        data-upload-popup="upload-feedback"
+        data-max-upload-bytes="2097152"
+        style="display: grid; gap: 1rem;"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{.CSRFToken}}"
+        >
+
+        <input
+            type="hidden"
+            name="object_id"
+            value="{{.Event.ID.Hex}}"
+        >
+
+        <label>
+            Title
+            <input
+                type="text"
+                name="title"
+                value="{{.Event.Title}}"
+                maxlength="150"
+                required
+            >
+        </label>
+
+        <label>
+            Description
+            <textarea
+                name="description"
+                maxlength="3000"
+                rows="6"
+            >{{.Event.Description}}</textarea>
+        </label>
+
+        <label>
+            Date
+            <input
+                type="date"
+                name="date"
+                value="{{.Event.Date}}"
+                required
+            >
+        </label>
+
+        <label>
+            Location
+            <input
+                type="text"
+                name="location"
+                value="{{.Event.Location}}"
+                maxlength="255"
+                required
+            >
+        </label>
+
+        <label>
+            Replace event image
+            <input
+                type="file"
+                name="image"
+                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+            >
+        </label>
+
+        {{if .Event.ImageURL}}
+            <label>
+                <input
+                    type="checkbox"
+                    name="remove_image"
+                    value="true"
+                >
+                Remove current image
+            </label>
+        {{end}}
+
+        <button type="submit" class="btn btn-primary">
+            Save Event
+        </button>
+    </form>
+</section>
+
+<script src="/static/js/image_upload.js"></script>
 {{end}}

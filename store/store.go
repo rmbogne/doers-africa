@@ -29,41 +29,6 @@ type AuthSession struct {
 // ----- VARIABLES --------------------------
 var DB *Database
 
-func InitStore() {
-	const postgresConnectionString = "host=localhost port=5433 user=user password=password dbname=africandoers sslmode=disable"
-
-	pg, err := sql.Open("postgres", postgresConnectionString)
-	if err != nil {
-		log.Fatalf("Failed to initialize PostgreSQL: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := pg.PingContext(ctx); err != nil {
-		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
-	}
-
-	mongoClientOptions := options.Client().
-		ApplyURI("mongodb://root:password@localhost:27017")
-
-	mongoClient, err := mongo.Connect(ctx, mongoClientOptions)
-	if err != nil {
-		log.Fatalf("Failed to initialize MongoDB: %v", err)
-	}
-
-	if err := mongoClient.Ping(ctx, nil); err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
-	}
-
-	DB = &Database{
-		PG:    pg,
-		Mongo: mongoClient.Database("africandoers"),
-	}
-
-	setupPGSchema()
-}
-
 func setupPGSchema() {
 	schemaSetups := []struct {
 		name  string

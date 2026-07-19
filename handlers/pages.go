@@ -39,6 +39,7 @@ type PageData struct {
 	RequestReplayed        bool
 	RequestSubmissionToken string
 	CSRFToken              string
+	UploadError            string
 }
 
 func render(
@@ -50,6 +51,14 @@ func render(
 	role, _ := middleware.GetRoleAndID(r)
 	data.Role = role
 	data.CSRFToken = middleware.CSRFToken(r)
+
+	if data.UploadError == "" {
+		data.UploadError = uploadErrorMessage(
+			r.URL.Query().Get(
+				"upload_error",
+			),
+		)
+	}
 
 	parsedTemplate, err := template.ParseFiles(
 		"templates/base.html",
@@ -374,4 +383,25 @@ func ServiceDetailHandler(
 			RequestSubmissionToken: requestSubmissionToken,
 		},
 	)
+}
+
+func uploadErrorMessage(errorCode string) string {
+	switch strings.ToLower(
+		strings.TrimSpace(errorCode),
+	) {
+	case "too_large":
+		return "The selected image is too large. Choose a JPEG or PNG smaller than 2 MB."
+
+	case "unsupported":
+		return "The selected file is not supported. Choose a valid JPEG or PNG image."
+
+	case "invalid":
+		return "The selected file could not be processed as a valid image."
+
+	case "invalid_form":
+		return "The upload form could not be processed. Select the image again and retry."
+
+	default:
+		return ""
+	}
 }

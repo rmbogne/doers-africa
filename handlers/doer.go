@@ -7,11 +7,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mbogne/african-doers/internal/imageupload"
 	"github.com/mbogne/african-doers/internal/mongoid"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
+
+const multipartMemoryBytes int64 = 1 << 20
 
 func DoerDashboardHandler(
 	w http.ResponseWriter,
@@ -105,17 +108,22 @@ func DoerNewEventHandler(
 		return
 
 	case http.MethodPost:
-		if err := r.ParseForm(); err != nil {
-			http.Error(
-				w,
-				"Invalid event request",
-				http.StatusBadRequest,
+		if !parseMultipartRequest(w, r) {
+			return
+		}
+		defer cleanupMultipartForm(r)
+
+		uploadedImage, imageProvided, err :=
+			imageupload.SaveOptional(
+				r,
+				"image",
+				"events",
 			)
+		if err != nil {
+			handleImageUploadError(w, r, err)
 			return
 		}
 
-		// Ownership is derived exclusively from the authenticated session.
-		// No doer_id form value is accepted.
 		event := models.Event{
 			Title: strings.TrimSpace(
 				r.FormValue("title"),
@@ -132,9 +140,17 @@ func DoerNewEventHandler(
 			DoerID: doerID,
 		}
 
+		if imageProvided {
+			event.ImageURL =
+				uploadedImage.URL
+		}
+
 		if event.Title == "" ||
 			event.Date == "" ||
 			event.Location == "" {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			http.Error(
 				w,
 				"Title, date, and location are required",
@@ -143,7 +159,12 @@ func DoerNewEventHandler(
 			return
 		}
 
-		if _, err := store.DB.AddEvent(event); err != nil {
+		if _, err := store.DB.AddEvent(
+			event,
+		); err != nil {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			log.Printf("AddEvent error: %v", err)
 			http.Error(
 				w,
@@ -190,14 +211,10 @@ func DoerNewServiceHandler(
 		return
 
 	case http.MethodPost:
-		if err := r.ParseForm(); err != nil {
-			http.Error(
-				w,
-				"Invalid service request",
-				http.StatusBadRequest,
-			)
+		if !parseMultipartRequest(w, r) {
 			return
 		}
+		defer cleanupMultipartForm(r)
 
 		price, err := strconv.Atoi(
 			strings.TrimSpace(
@@ -213,7 +230,17 @@ func DoerNewServiceHandler(
 			return
 		}
 
-		// Ownership is derived exclusively from the authenticated session.
+		uploadedImage, imageProvided, err :=
+			imageupload.SaveOptional(
+				r,
+				"image",
+				"services",
+			)
+		if err != nil {
+			handleImageUploadError(w, r, err)
+			return
+		}
+
 		service := models.Service{
 			Title: strings.TrimSpace(
 				r.FormValue("title"),
@@ -225,8 +252,16 @@ func DoerNewServiceHandler(
 			DoerID: doerID,
 		}
 
+		if imageProvided {
+			service.ImageURL =
+				uploadedImage.URL
+		}
+
 		if service.Title == "" ||
 			service.Description == "" {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			http.Error(
 				w,
 				"Title and description are required",
@@ -238,6 +273,9 @@ func DoerNewServiceHandler(
 		if _, err := store.DB.AddService(
 			service,
 		); err != nil {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			log.Printf("AddService error: %v", err)
 			http.Error(
 				w,
@@ -286,40 +324,61 @@ func DoerEditEventHandler(
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		event, err := store.DB.GetEventOwned(
+	existingEvent, err :=
+		store.DB.GetEventOwned(
 			r.Context(),
 			eventID,
 			doerID,
 		)
-		if err != nil {
-			handleOwnedObjectError(
-				w,
-				"load event",
-				err,
-			)
-			return
-		}
+	if err != nil {
+		handleOwnedObjectError(
+			w,
+			"load event",
+			err,
+		)
+		return
+	}
 
+	switch r.Method {
+	case http.MethodGet:
 		render(
 			w,
 			r,
 			"edit_event.html",
 			PageData{
-				Event: event,
+				Event: existingEvent,
 			},
 		)
 		return
 
 	case http.MethodPost:
-		if err := r.ParseForm(); err != nil {
-			http.Error(
-				w,
-				"Invalid event update",
-				http.StatusBadRequest,
-			)
+		if !parseMultipartRequest(w, r) {
 			return
+		}
+		defer cleanupMultipartForm(r)
+
+		uploadedImage, imageProvided, err :=
+			imageupload.SaveOptional(
+				r,
+				"image",
+				"events",
+			)
+		if err != nil {
+			handleImageUploadError(w, r, err)
+			return
+		}
+
+		imageURL := existingEvent.ImageURL
+
+		if strings.EqualFold(
+			r.FormValue("remove_image"),
+			"true",
+		) {
+			imageURL = ""
+		}
+
+		if imageProvided {
+			imageURL = uploadedImage.URL
 		}
 
 		event := models.Event{
@@ -335,11 +394,15 @@ func DoerEditEventHandler(
 			Location: strings.TrimSpace(
 				r.FormValue("location"),
 			),
+			ImageURL: imageURL,
 		}
 
 		if event.Title == "" ||
 			event.Date == "" ||
 			event.Location == "" {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			http.Error(
 				w,
 				"Title, date, and location are required",
@@ -354,12 +417,178 @@ func DoerEditEventHandler(
 			doerID,
 			event,
 		); err != nil {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
 			handleOwnedObjectError(
 				w,
 				"update event",
 				err,
 			)
 			return
+		}
+
+		if existingEvent.ImageURL != imageURL {
+			removeUploadedImage(
+				existingEvent.ImageURL,
+			)
+		}
+
+		http.Redirect(
+			w,
+			r,
+			"/doer/dashboard",
+			http.StatusSeeOther,
+		)
+		return
+
+	default:
+		allowDoerMethods(
+			w,
+			http.MethodGet,
+			http.MethodPost,
+		)
+	}
+}
+
+func DoerEditServiceHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	doerID, ok := authenticatedDoerID(w, r)
+	if !ok {
+		return
+	}
+
+	serviceID, err := requestResourceID(
+		r,
+		"/doer/service/edit/",
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"Invalid service ID",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	existingService, err :=
+		store.DB.GetServiceOwned(
+			r.Context(),
+			serviceID,
+			doerID,
+		)
+	if err != nil {
+		handleOwnedObjectError(
+			w,
+			"load service",
+			err,
+		)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		render(
+			w,
+			r,
+			"edit_service.html",
+			PageData{
+				Service: existingService,
+			},
+		)
+		return
+
+	case http.MethodPost:
+		if !parseMultipartRequest(w, r) {
+			return
+		}
+		defer cleanupMultipartForm(r)
+
+		price, err := strconv.Atoi(
+			strings.TrimSpace(
+				r.FormValue("price"),
+			),
+		)
+		if err != nil || price < 0 {
+			http.Error(
+				w,
+				"Price must be a non-negative whole number",
+				http.StatusBadRequest,
+			)
+			return
+		}
+
+		uploadedImage, imageProvided, err :=
+			imageupload.SaveOptional(
+				r,
+				"image",
+				"services",
+			)
+		if err != nil {
+			handleImageUploadError(w, r, err)
+			return
+		}
+
+		imageURL := existingService.ImageURL
+
+		if strings.EqualFold(
+			r.FormValue("remove_image"),
+			"true",
+		) {
+			imageURL = ""
+		}
+
+		if imageProvided {
+			imageURL = uploadedImage.URL
+		}
+
+		service := models.Service{
+			Title: strings.TrimSpace(
+				r.FormValue("title"),
+			),
+			Description: strings.TrimSpace(
+				r.FormValue("description"),
+			),
+			Price:    price,
+			ImageURL: imageURL,
+		}
+
+		if service.Title == "" ||
+			service.Description == "" {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
+			http.Error(
+				w,
+				"Title and description are required",
+				http.StatusBadRequest,
+			)
+			return
+		}
+
+		if err := store.DB.UpdateServiceOwned(
+			r.Context(),
+			serviceID,
+			doerID,
+			service,
+		); err != nil {
+			removeUploadedImage(
+				uploadedImage.URL,
+			)
+			handleOwnedObjectError(
+				w,
+				"update service",
+				err,
+			)
+			return
+		}
+
+		if existingService.ImageURL != imageURL {
+			removeUploadedImage(
+				existingService.ImageURL,
+			)
 		}
 
 		http.Redirect(
@@ -406,11 +635,12 @@ func DoerArchiveEventHandler(
 		return
 	}
 
-	if err := store.DB.ArchiveEventOwned(
+	imageURL, err := store.DB.ArchiveEventOwned(
 		r.Context(),
 		eventID,
 		doerID,
-	); err != nil {
+	)
+	if err != nil {
 		handleOwnedObjectError(
 			w,
 			"archive event",
@@ -418,6 +648,8 @@ func DoerArchiveEventHandler(
 		)
 		return
 	}
+
+	removeUploadedImage(imageURL)
 
 	http.Redirect(
 		w,
@@ -454,11 +686,13 @@ func DoerArchiveServiceHandler(
 		return
 	}
 
-	if err := store.DB.ArchiveServiceOwned(
-		r.Context(),
-		serviceID,
-		doerID,
-	); err != nil {
+	imageURL, err :=
+		store.DB.ArchiveServiceOwned(
+			r.Context(),
+			serviceID,
+			doerID,
+		)
+	if err != nil {
 		handleOwnedObjectError(
 			w,
 			"archive service",
@@ -467,12 +701,149 @@ func DoerArchiveServiceHandler(
 		return
 	}
 
+	removeUploadedImage(imageURL)
+
 	http.Redirect(
 		w,
 		r,
 		"/doer/dashboard",
 		http.StatusSeeOther,
 	)
+}
+
+func parseMultipartRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+) bool {
+	if err := r.ParseMultipartForm(
+		multipartMemoryBytes,
+	); err != nil {
+		var maximumBytesError *http.MaxBytesError
+
+		if errors.As(
+			err,
+			&maximumBytesError,
+		) {
+			redirectUploadFormError(
+				w,
+				r,
+				"too_large",
+			)
+			return false
+		}
+
+		redirectUploadFormError(
+			w,
+			r,
+			"invalid_form",
+		)
+		return false
+	}
+
+	return true
+}
+
+func cleanupMultipartForm(r *http.Request) {
+	if r.MultipartForm == nil {
+		return
+	}
+
+	if err := r.MultipartForm.RemoveAll(); err != nil {
+		log.Printf(
+			"Unable to remove multipart temporary files: %v",
+			err,
+		)
+	}
+}
+
+func handleImageUploadError(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+) {
+	switch {
+	case errors.Is(
+		err,
+		imageupload.ErrImageTooLarge,
+	):
+		redirectUploadFormError(
+			w,
+			r,
+			"too_large",
+		)
+
+	case errors.Is(
+		err,
+		imageupload.ErrUnsupportedImageType,
+	):
+		redirectUploadFormError(
+			w,
+			r,
+			"unsupported",
+		)
+
+	case errors.Is(
+		err,
+		imageupload.ErrInvalidImage,
+	),
+		errors.Is(
+			err,
+			imageupload.ErrImageDimensions,
+		):
+		redirectUploadFormError(
+			w,
+			r,
+			"invalid",
+		)
+
+	default:
+		log.Printf(
+			"Image upload error: %v",
+			err,
+		)
+		http.Error(
+			w,
+			"Unable to process image",
+			http.StatusInternalServerError,
+		)
+	}
+}
+
+func redirectUploadFormError(
+	w http.ResponseWriter,
+	r *http.Request,
+	errorCode string,
+) {
+	queryValues := r.URL.Query()
+	queryValues.Set(
+		"upload_error",
+		errorCode,
+	)
+
+	redirectURL := r.URL.Path
+
+	if encodedQuery := queryValues.Encode(); encodedQuery != "" {
+		redirectURL += "?" + encodedQuery
+	}
+
+	http.Redirect(
+		w,
+		r,
+		redirectURL,
+		http.StatusSeeOther,
+	)
+}
+
+func removeUploadedImage(imageURL string) {
+	if err := imageupload.Delete(
+		imageURL,
+	); err != nil {
+		log.Printf(
+			"Unable to remove uploaded image %q: %v",
+			imageURL,
+			err,
+		)
+	}
 }
 
 func authenticatedDoerID(
@@ -513,7 +884,6 @@ func handleOwnedObjectError(
 		err,
 		store.ErrOwnedObjectNotFound,
 	):
-		// Return one response for both nonexistent and foreign-owned objects.
 		http.Error(
 			w,
 			"Object not found or action is not permitted",

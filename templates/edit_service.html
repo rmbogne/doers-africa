@@ -64,10 +64,24 @@
         border-radius: 1rem;
     "
 >
-    <h1 style="margin-top: 0;">Create Event</h1>
+    <h1 style="margin-top: 0;">Edit Service</h1>
+
+    {{if .Service.ImageURL}}
+        <img
+            src="{{.Service.ImageURL}}"
+            alt="{{.Service.Title}}"
+            style="
+                width: 100%;
+                max-height: 360px;
+                margin-bottom: 1.25rem;
+                border-radius: 0.75rem;
+                object-fit: cover;
+            "
+        >
+    {{end}}
 
     <form
-        action="/doer/event/new"
+        action="/doer/service/edit?id={{.Service.ID.Hex}}"
         method="POST"
         enctype="multipart/form-data"
         data-image-upload-form
@@ -81,11 +95,18 @@
             value="{{.CSRFToken}}"
         >
 
+        <input
+            type="hidden"
+            name="object_id"
+            value="{{.Service.ID.Hex}}"
+        >
+
         <label>
             Title
             <input
                 type="text"
                 name="title"
+                value="{{.Service.Title}}"
                 maxlength="150"
                 required
             >
@@ -97,30 +118,24 @@
                 name="description"
                 maxlength="3000"
                 rows="6"
-            ></textarea>
+                required
+            >{{.Service.Description}}</textarea>
         </label>
 
         <label>
-            Date
+            Price
             <input
-                type="date"
-                name="date"
+                type="number"
+                name="price"
+                value="{{.Service.Price}}"
+                min="0"
+                step="1"
                 required
             >
         </label>
 
         <label>
-            Location
-            <input
-                type="text"
-                name="location"
-                maxlength="255"
-                required
-            >
-        </label>
-
-        <label>
-            Event image
+            Replace service image
             <input
                 type="file"
                 name="image"
@@ -128,13 +143,19 @@
             >
         </label>
 
-        <small style="color: var(--text-muted);">
-            Optional. JPEG or PNG, maximum 2 MB. The server removes metadata,
-            corrects orientation, resizes, and stores a new JPEG.
-        </small>
+        {{if .Service.ImageURL}}
+            <label>
+                <input
+                    type="checkbox"
+                    name="remove_image"
+                    value="true"
+                >
+                Remove current image
+            </label>
+        {{end}}
 
         <button type="submit" class="btn btn-primary">
-            Create Event
+            Save Service
         </button>
     </form>
 </section>

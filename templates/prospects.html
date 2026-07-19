@@ -231,9 +231,9 @@
             >
                 {{range .ServiceViews}}
                     <article class="listing-card">
-                        {{if .Doer.FlyerURL}}
+                        {{if .Service.ImageURL}}
                             <img
-                                src="{{.Doer.FlyerURL}}"
+                                src="{{.Service.ImageURL}}"
                                 alt="{{.Doer.Name}} service"
                                 class="listing-image"
                                 loading="lazy"
@@ -332,6 +332,15 @@
             >
                 {{range .Events}}
                     <article class="listing-card">
+                        {{if .ImageURL}}
+                            <img
+                                src="{{.ImageURL}}"
+                                alt="{{.Title}}"
+                                class="listing-image"
+                                loading="lazy"
+                            >
+                        {{end}}
+
                         <div class="event-date">
                             {{.Date}}
                         </div>
@@ -361,11 +370,6 @@
                                     action="/event/{{.ID.Hex}}/rsvp"
                                     method="POST"
                                 >
-                            <input
-                                type="hidden"
-                                name="csrf_token"
-                                value="{{$.CSRFToken}}"
-                            >
                                     <button
                                         type="submit"
                                         class="btn btn-primary"

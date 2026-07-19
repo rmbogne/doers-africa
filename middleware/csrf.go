@@ -7,10 +7,11 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,28 +22,100 @@ const (
 	CSRFFieldName  = "csrf_token"
 	CSRFHeaderName = "X-CSRF-Token"
 
-	csrfTokenBytes        = 32
-	csrfMaxAge            = 12 * time.Hour
-	csrfMultipartMaxBytes = 12 << 20
-	csrfMultipartMemory   = 10 << 20
+	csrfTokenBytes = 32
 )
+
+type CSRFConfig struct {
+	Secret               string
+	CookieSecure         bool
+	MaxAge               time.Duration
+	MultipartMaxBytes    int64
+	MultipartMemoryBytes int64
+}
 
 type csrfContextKey struct{}
 
-var (
-	csrfSecretOnce sync.Once
-	csrfSecretKey  []byte
+var errCSRFMulitpartTooLarge = errors.New(
+	"multipart form exceeds request limit",
 )
 
-// CSRF protects POST, PUT, PATCH, and DELETE requests using a signed
-// double-submit token. It also exposes a token through CSRFToken(r) so the
-// server-rendered templates can place it in forms.
+var csrfRuntimeConfig struct {
+	sync.RWMutex
+	configured           bool
+	secret               []byte
+	cookieSecure         bool
+	maxAge               time.Duration
+	multipartMaxBytes    int64
+	multipartMemoryBytes int64
+}
+
+// ConfigureCSRF must be called once during application startup using validated
+// environment configuration.
+func ConfigureCSRF(
+	configuration CSRFConfig,
+) error {
+	if len(strings.TrimSpace(
+		configuration.Secret,
+	)) < 32 {
+		return fmt.Errorf(
+			"CSRF secret must contain at least 32 characters",
+		)
+	}
+
+	if configuration.MaxAge <= 0 {
+		return fmt.Errorf(
+			"CSRF max age must be positive",
+		)
+	}
+
+	if configuration.MultipartMaxBytes <= 0 {
+		return fmt.Errorf(
+			"CSRF multipart maximum must be positive",
+		)
+	}
+
+	if configuration.MultipartMemoryBytes <= 0 ||
+		configuration.MultipartMemoryBytes >
+			configuration.MultipartMaxBytes {
+		return fmt.Errorf(
+			"invalid CSRF multipart memory limit",
+		)
+	}
+
+	csrfRuntimeConfig.Lock()
+	defer csrfRuntimeConfig.Unlock()
+
+	csrfRuntimeConfig.secret = []byte(
+		configuration.Secret,
+	)
+	csrfRuntimeConfig.cookieSecure =
+		configuration.CookieSecure
+	csrfRuntimeConfig.maxAge =
+		configuration.MaxAge
+	csrfRuntimeConfig.multipartMaxBytes =
+		configuration.MultipartMaxBytes
+	csrfRuntimeConfig.multipartMemoryBytes =
+		configuration.MultipartMemoryBytes
+	csrfRuntimeConfig.configured = true
+
+	return nil
+}
+
 func CSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(
 			w http.ResponseWriter,
 			r *http.Request,
 		) {
+			if !csrfConfigured() {
+				http.Error(
+					w,
+					"Application security is not configured",
+					http.StatusInternalServerError,
+				)
+				return
+			}
+
 			token, validCookie :=
 				readCSRFCookie(r)
 
@@ -79,6 +152,18 @@ func CSRF(next http.Handler) http.Handler {
 					r,
 				)
 				if err != nil {
+					if errors.Is(
+						err,
+						errCSRFMulitpartTooLarge,
+					) {
+						redirectMultipartFormError(
+							w,
+							r,
+							"too_large",
+						)
+						return
+					}
+
 					http.Error(
 						w,
 						"Invalid form submission",
@@ -105,7 +190,6 @@ func CSRF(next http.Handler) http.Handler {
 	)
 }
 
-// CSRFToken returns the request token made available by CSRF middleware.
 func CSRFToken(r *http.Request) string {
 	token, _ := r.Context().
 		Value(csrfContextKey{}).(string)
@@ -132,15 +216,34 @@ func submittedCSRFToken(
 		contentType,
 		"multipart/form-data",
 	) {
+		maximumBytes,
+			memoryBytes :=
+			csrfMultipartLimits()
+
+		if r.ContentLength > maximumBytes {
+			return "",
+				errCSRFMulitpartTooLarge
+		}
+
 		r.Body = http.MaxBytesReader(
 			w,
 			r.Body,
-			csrfMultipartMaxBytes,
+			maximumBytes,
 		)
 
 		if err := r.ParseMultipartForm(
-			csrfMultipartMemory,
+			memoryBytes,
 		); err != nil {
+			var maximumBytesError *http.MaxBytesError
+
+			if errors.As(
+				err,
+				&maximumBytesError,
+			) {
+				return "",
+					errCSRFMulitpartTooLarge
+			}
+
 			return "", err
 		}
 	} else if err := r.ParseForm(); err != nil {
@@ -150,6 +253,31 @@ func submittedCSRFToken(
 	return strings.TrimSpace(
 		r.Form.Get(CSRFFieldName),
 	), nil
+}
+
+func redirectMultipartFormError(
+	w http.ResponseWriter,
+	r *http.Request,
+	errorCode string,
+) {
+	queryValues := r.URL.Query()
+	queryValues.Set(
+		"upload_error",
+		errorCode,
+	)
+
+	redirectURL := r.URL.Path
+
+	if encodedQuery := queryValues.Encode(); encodedQuery != "" {
+		redirectURL += "?" + encodedQuery
+	}
+
+	http.Redirect(
+		w,
+		r,
+		redirectURL,
+		http.StatusSeeOther,
+	)
 }
 
 func readCSRFCookie(
@@ -238,39 +366,10 @@ func signCSRFValue(value string) string {
 }
 
 func csrfSecret() []byte {
-	csrfSecretOnce.Do(
-		func() {
-			configuredSecret := strings.TrimSpace(
-				os.Getenv("CSRF_SECRET"),
-			)
+	csrfRuntimeConfig.RLock()
+	defer csrfRuntimeConfig.RUnlock()
 
-			if len(configuredSecret) >= 32 {
-				csrfSecretKey =
-					[]byte(configuredSecret)
-				return
-			}
-
-			// Local-development fallback. Production must configure
-			// CSRF_SECRET so tokens remain valid across instances/restarts.
-			csrfSecretKey = make([]byte, 32)
-
-			if _, err := rand.Read(
-				csrfSecretKey,
-			); err != nil {
-				panic(
-					"unable to initialize CSRF secret: " +
-						err.Error(),
-				)
-			}
-
-			log.Print(
-				"Warning: CSRF_SECRET is not configured; " +
-					"using an ephemeral development secret",
-			)
-		},
-	)
-
-	return csrfSecretKey
+	return csrfRuntimeConfig.secret
 }
 
 func setCSRFCookie(
@@ -278,14 +377,16 @@ func setCSRFCookie(
 	r *http.Request,
 	token string,
 ) {
+	maximumAge := csrfMaxAge()
+
 	http.SetCookie(
 		w,
 		&http.Cookie{
 			Name:     csrfCookieName,
 			Value:    token,
 			Path:     "/",
-			MaxAge:   int(csrfMaxAge.Seconds()),
-			Expires:  time.Now().Add(csrfMaxAge),
+			MaxAge:   int(maximumAge.Seconds()),
+			Expires:  time.Now().Add(maximumAge),
 			HttpOnly: true,
 			Secure:   csrfCookieSecure(r),
 			SameSite: http.SameSiteStrictMode,
@@ -298,37 +399,39 @@ func csrfCookieSecure(r *http.Request) bool {
 		return true
 	}
 
-	// Safari does not consistently accept/send Secure cookies over plain
-	// http://localhost. Always keep the cookie non-Secure for an HTTP
-	// loopback development address, even if an inherited shell variable is
-	// accidentally set to true.
 	if isLoopbackHost(r.Host) {
 		return false
 	}
 
-	forwardedProto := strings.TrimSpace(
-		strings.Split(
-			r.Header.Get("X-Forwarded-Proto"),
-			",",
-		)[0],
-	)
+	csrfRuntimeConfig.RLock()
+	defer csrfRuntimeConfig.RUnlock()
 
-	if strings.EqualFold(
-		forwardedProto,
-		"https",
-	) {
-		return true
-	}
+	return csrfRuntimeConfig.cookieSecure
+}
 
-	configuredValue := strings.ToLower(
-		strings.TrimSpace(
-			os.Getenv("CSRF_COOKIE_SECURE"),
-		),
-	)
+func csrfConfigured() bool {
+	csrfRuntimeConfig.RLock()
+	defer csrfRuntimeConfig.RUnlock()
 
-	return configuredValue == "true" ||
-		configuredValue == "1" ||
-		configuredValue == "yes"
+	return csrfRuntimeConfig.configured
+}
+
+func csrfMaxAge() time.Duration {
+	csrfRuntimeConfig.RLock()
+	defer csrfRuntimeConfig.RUnlock()
+
+	return csrfRuntimeConfig.maxAge
+}
+
+func csrfMultipartLimits() (
+	maximumBytes int64,
+	memoryBytes int64,
+) {
+	csrfRuntimeConfig.RLock()
+	defer csrfRuntimeConfig.RUnlock()
+
+	return csrfRuntimeConfig.multipartMaxBytes,
+		csrfRuntimeConfig.multipartMemoryBytes
 }
 
 func isLoopbackHost(rawHost string) bool {

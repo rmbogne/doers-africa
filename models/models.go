@@ -37,6 +37,7 @@ type Event struct {
 	Date        string             `bson:"date"`
 	Location    string             `bson:"location"`
 	DoerID      int                `bson:"doer_id"`
+	ImageURL    string             `bson:"image_url,omitempty" json:"image_url,omitempty"`
 }
 
 type Service struct {
@@ -45,6 +46,7 @@ type Service struct {
 	Description string             `bson:"description"`
 	Price       int                `bson:"price"`
 	DoerID      int                `bson:"doer_id"`
+	ImageURL    string             `bson:"image_url,omitempty" json:"image_url,omitempty"`
 }
 
 type RSVP struct {

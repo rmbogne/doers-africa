@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mbogne/african-doers/handlers"
+	"github.com/mbogne/african-doers/internal/config"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/store"
 )
@@ -23,8 +24,43 @@ func backgroundWorker() {
 }
 
 func main() {
-	store.InitStore()
+	applicationConfig, err := config.Load()
+	if err != nil {
+		log.Fatalf(
+			"Invalid application configuration: %v",
+			err,
+		)
+	}
 
+	if err := middleware.ConfigureCSRF(
+		middleware.CSRFConfig{
+			Secret: applicationConfig.CSRFSecret,
+
+			CookieSecure: applicationConfig.CSRFCookieSecure,
+
+			MaxAge: applicationConfig.CSRFTTL,
+
+			MultipartMaxBytes: applicationConfig.RequestBodyMaxBytes,
+
+			MultipartMemoryBytes: applicationConfig.MultipartMemoryBytes,
+		},
+	); err != nil {
+		log.Fatalf(
+			"Unable to configure CSRF protection: %v",
+			err,
+		)
+	}
+
+	if err := store.InitStore(
+		applicationConfig,
+	); err != nil {
+		log.Fatalf(
+			"Unable to initialize data stores: %v",
+			err,
+		)
+	}
+
+	// The worker starts only after the databases are ready.
 	go backgroundWorker()
 
 	mux := http.NewServeMux()
@@ -137,6 +173,15 @@ func main() {
 	)
 
 	mux.Handle(
+		"/doer/service/edit",
+		middleware.RequireRole(
+			"doer",
+			http.HandlerFunc(
+				handlers.DoerEditServiceHandler,
+			),
+		),
+	)
+	mux.Handle(
 		"/doer/event/archive/",
 		middleware.RequireRole(
 			"doer",
@@ -234,13 +279,16 @@ func main() {
 
 	// Auth must execute before RequireRole.
 	handler := middleware.Logger(
-		middleware.CSRF(
-			middleware.Auth(mux),
+		middleware.RequestBodyLimit(
+			middleware.DefaultMaximumRequestBodyBytes,
+			middleware.CSRF(
+				middleware.Auth(mux),
+			),
 		),
 	)
 
 	server := &http.Server{
-		Addr:              ":8080",
+		Addr:              applicationConfig.ServerAddress,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -248,7 +296,18 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Println("Server starting on http://localhost:8080")
+	log.Printf(
+		"AfrikOpen Space starting in %s mode on %s",
+		applicationConfig.Environment,
+		applicationConfig.ServerAddress,
+	)
+
+	log.Fatal(
+		http.ListenAndServe(
+			applicationConfig.ServerAddress,
+			handler,
+		),
+	)
 
 	if err := server.ListenAndServe(); err != nil &&
 		err != http.ErrServerClosed {
