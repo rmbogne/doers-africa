@@ -23,6 +23,7 @@ const (
 	registrationFormMemory  int64 = 2 << 20
 	sessionCookieName             = "session"
 	sessionDuration               = 24 * time.Hour
+	methodNotAllowedMessage       = "Method not allowed"
 )
 
 func LoginHandler(
@@ -48,7 +49,7 @@ func LoginHandler(
 		)
 		http.Error(
 			w,
-			"Method not allowed",
+			methodNotAllowedMessage,
 			http.StatusMethodNotAllowed,
 		)
 	}
@@ -195,7 +196,7 @@ func RegisterHandler(
 		)
 		http.Error(
 			w,
-			"Method not allowed",
+			methodNotAllowedMessage,
 			http.StatusMethodNotAllowed,
 		)
 	}
@@ -374,7 +375,7 @@ func LogoutHandler(
 		)
 		http.Error(
 			w,
-			"Method not allowed",
+			methodNotAllowedMessage,
 			http.StatusMethodNotAllowed,
 		)
 		return

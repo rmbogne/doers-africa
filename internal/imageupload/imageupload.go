@@ -34,7 +34,9 @@ const (
 )
 
 var (
-	ErrMissingImage = errors.New("no image was uploaded")
+	ErrMissingImage = errors.New(
+		"no image was uploaded",
+	)
 
 	ErrImageTooLarge = errors.New(
 		"image exceeds the 2 MB limit",
@@ -95,53 +97,101 @@ func SaveOptional(
 	return savedImage, true, nil
 }
 
-// Save accepts a JPEG or PNG image, validates its real contents and decoded
-// dimensions, applies JPEG orientation, scales it down, composites
-// transparency onto white, and writes a new JPEG file.
+// Save accepts a JPEG or PNG image, validates its real content and decoded
+// dimensions, applies orientation, scales it down, removes transparency, and
+// atomically stores a re-encoded JPEG.
 func Save(
 	file multipart.File,
 	header *multipart.FileHeader,
 	category string,
 ) (SavedImage, error) {
-	directoryName, err := safeCategory(category)
+	directoryName, err :=
+		validateUploadMetadata(
+			header,
+			category,
+		)
 	if err != nil {
 		return SavedImage{}, err
 	}
 
-	if header != nil &&
-		header.Size > MaxUploadBytes {
-		return SavedImage{}, ErrImageTooLarge
+	imageBytes, err :=
+		readAndValidateImage(file)
+	if err != nil {
+		return SavedImage{}, err
 	}
 
+	normalizedImage, err :=
+		decodeAndNormalizeImage(imageBytes)
+	if err != nil {
+		return SavedImage{}, err
+	}
+
+	return persistImage(
+		normalizedImage,
+		directoryName,
+	)
+}
+
+func validateUploadMetadata(
+	header *multipart.FileHeader,
+	category string,
+) (string, error) {
+	directoryName, err := safeCategory(
+		category,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if header != nil &&
+		header.Size > MaxUploadBytes {
+		return "", ErrImageTooLarge
+	}
+
+	return directoryName, nil
+}
+
+func readAndValidateImage(
+	file multipart.File,
+) ([]byte, error) {
 	imageBytes, err := readLimited(
 		file,
 		MaxUploadBytes,
 	)
 	if err != nil {
-		return SavedImage{}, err
+		return nil, err
 	}
 
-	if err := validateContentType(imageBytes); err != nil {
-		return SavedImage{}, err
+	if err := validateContentType(
+		imageBytes,
+	); err != nil {
+		return nil, err
 	}
 
+	return imageBytes, nil
+}
+
+func decodeAndNormalizeImage(
+	imageBytes []byte,
+) (image.Image, error) {
 	config, format, err := image.DecodeConfig(
 		bytes.NewReader(imageBytes),
 	)
 	if err != nil {
-		return SavedImage{}, ErrInvalidImage
+		return nil, ErrInvalidImage
 	}
 
-	if format != "jpeg" && format != "png" {
-		return SavedImage{},
-			ErrUnsupportedImageType
+	if err := validateImageFormat(
+		format,
+	); err != nil {
+		return nil, err
 	}
 
 	if err := validateDimensions(
 		config.Width,
 		config.Height,
 	); err != nil {
-		return SavedImage{}, err
+		return nil, err
 	}
 
 	decodedImage, err := imaging.Decode(
@@ -149,21 +199,37 @@ func Save(
 		imaging.AutoOrientation(true),
 	)
 	if err != nil {
-		return SavedImage{}, ErrInvalidImage
+		return nil, ErrInvalidImage
 	}
 
-	normalizedImage := imaging.Fit(
+	resizedImage := imaging.Fit(
 		decodedImage,
 		maxOutputWidth,
 		maxOutputHeight,
 		imaging.Lanczos,
 	)
 
-	// JPEG does not support transparency. Composite PNG transparency onto a
-	// white background instead of allowing transparent pixels to turn black.
+	return compositeOnWhite(resizedImage), nil
+}
+
+func validateImageFormat(
+	format string,
+) error {
+	switch format {
+	case "jpeg", "png":
+		return nil
+
+	default:
+		return ErrUnsupportedImageType
+	}
+}
+
+func compositeOnWhite(
+	sourceImage image.Image,
+) image.Image {
 	background := imaging.New(
-		normalizedImage.Bounds().Dx(),
-		normalizedImage.Bounds().Dy(),
+		sourceImage.Bounds().Dx(),
+		sourceImage.Bounds().Dy(),
 		color.NRGBA{
 			R: 255,
 			G: 255,
@@ -172,12 +238,17 @@ func Save(
 		},
 	)
 
-	normalizedImage = imaging.Paste(
+	return imaging.Paste(
 		background,
-		normalizedImage,
+		sourceImage,
 		image.Point{},
 	)
+}
 
+func persistImage(
+	normalizedImage image.Image,
+	directoryName string,
+) (SavedImage, error) {
 	fileName, err := randomFileName()
 	if err != nil {
 		return SavedImage{}, fmt.Errorf(
@@ -192,14 +263,10 @@ func Save(
 		directoryName,
 	)
 
-	if err := os.MkdirAll(
+	if err := createUploadDirectory(
 		relativeDirectory,
-		0o750,
 	); err != nil {
-		return SavedImage{}, fmt.Errorf(
-			"create upload directory: %w",
-			err,
-		)
+		return SavedImage{}, err
 	}
 
 	finalPath := filepath.Join(
@@ -207,12 +274,56 @@ func Save(
 		fileName,
 	)
 
-	tempFile, err := os.CreateTemp(
+	if err := writeJPEGAtomically(
 		relativeDirectory,
+		finalPath,
+		normalizedImage,
+	); err != nil {
+		return SavedImage{}, err
+	}
+
+	return SavedImage{
+		URL: "/static/uploads/" +
+			directoryName +
+			"/" +
+			fileName,
+		FilePath: finalPath,
+		Width: normalizedImage.
+			Bounds().
+			Dx(),
+		Height: normalizedImage.
+			Bounds().
+			Dy(),
+	}, nil
+}
+
+func createUploadDirectory(
+	directory string,
+) error {
+	if err := os.MkdirAll(
+		directory,
+		0o750,
+	); err != nil {
+		return fmt.Errorf(
+			"create upload directory: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
+func writeJPEGAtomically(
+	directory string,
+	finalPath string,
+	normalizedImage image.Image,
+) error {
+	tempFile, err := os.CreateTemp(
+		directory,
 		".image-*.tmp",
 	)
 	if err != nil {
-		return SavedImage{}, fmt.Errorf(
+		return fmt.Errorf(
 			"create temporary image: %w",
 			err,
 		)
@@ -229,27 +340,67 @@ func Save(
 		}
 	}()
 
-	if err := imaging.Encode(
+	if err := encodeJPEG(
 		tempFile,
+		normalizedImage,
+	); err != nil {
+		return err
+	}
+
+	if err := finalizeTemporaryFile(
+		tempFile,
+		tempPath,
+	); err != nil {
+		return err
+	}
+
+	if err := os.Rename(
+		tempPath,
+		finalPath,
+	); err != nil {
+		return fmt.Errorf(
+			"commit image: %w",
+			err,
+		)
+	}
+
+	committed = true
+
+	return nil
+}
+
+func encodeJPEG(
+	destination io.Writer,
+	normalizedImage image.Image,
+) error {
+	if err := imaging.Encode(
+		destination,
 		normalizedImage,
 		imaging.JPEG,
 		imaging.JPEGQuality(jpegQuality),
 	); err != nil {
-		return SavedImage{}, fmt.Errorf(
+		return fmt.Errorf(
 			"re-encode image: %w",
 			err,
 		)
 	}
 
+	return nil
+}
+
+func finalizeTemporaryFile(
+	tempFile *os.File,
+	tempPath string,
+) error {
 	if err := tempFile.Sync(); err != nil {
-		return SavedImage{}, fmt.Errorf(
+		return fmt.Errorf(
 			"sync image: %w",
 			err,
 		)
 	}
 
 	if err := tempFile.Close(); err != nil {
-		return SavedImage{}, fmt.Errorf(
+		return fmt.Errorf(
 			"close image: %w",
 			err,
 		)
@@ -259,33 +410,13 @@ func Save(
 		tempPath,
 		0o640,
 	); err != nil {
-		return SavedImage{}, fmt.Errorf(
+		return fmt.Errorf(
 			"set image permissions: %w",
 			err,
 		)
 	}
 
-	if err := os.Rename(
-		tempPath,
-		finalPath,
-	); err != nil {
-		return SavedImage{}, fmt.Errorf(
-			"commit image: %w",
-			err,
-		)
-	}
-
-	committed = true
-
-	return SavedImage{
-		URL: "/static/uploads/" +
-			directoryName +
-			"/" +
-			fileName,
-		FilePath: finalPath,
-		Width:    normalizedImage.Bounds().Dx(),
-		Height:   normalizedImage.Bounds().Dy(),
-	}, nil
+	return nil
 }
 
 // Delete removes only application-managed upload URLs. External URLs and
@@ -349,7 +480,9 @@ func readLimited(
 		maximumBytes+1,
 	)
 
-	imageBytes, err := io.ReadAll(limitedReader)
+	imageBytes, err := io.ReadAll(
+		limitedReader,
+	)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"read image bytes: %w",
@@ -357,7 +490,8 @@ func readLimited(
 		)
 	}
 
-	if int64(len(imageBytes)) > maximumBytes {
+	if int64(len(imageBytes)) >
+		maximumBytes {
 		return nil, ErrImageTooLarge
 	}
 
@@ -426,10 +560,13 @@ func safeCategory(
 func randomFileName() (string, error) {
 	randomBytes := make([]byte, 16)
 
-	if _, err := rand.Read(randomBytes); err != nil {
+	if _, err := rand.Read(
+		randomBytes,
+	); err != nil {
 		return "", err
 	}
 
-	return hex.EncodeToString(randomBytes) +
-		".jpg", nil
+	return hex.EncodeToString(
+		randomBytes,
+	) + ".jpg", nil
 }
