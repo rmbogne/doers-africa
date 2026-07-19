@@ -4,9 +4,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 
+	"github.com/mbogne/african-doers/internal/validation"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
@@ -45,7 +44,8 @@ func DoerUpdateServiceRequestStatusHandler(
 		return
 	}
 
-	requestID, err := parseServiceRequestID(
+	requestID, err := validation.PositiveInt64(
+		"Service request ID",
 		r.FormValue("request_id"),
 	)
 	if err != nil {
@@ -57,45 +57,30 @@ func DoerUpdateServiceRequestStatusHandler(
 		return
 	}
 
-	nextStatus := strings.ToLower(
-		strings.TrimSpace(
-			r.FormValue("status"),
-		),
-	)
-	response := strings.TrimSpace(
-		r.FormValue("response"),
-	)
-
-	switch nextStatus {
-	case models.ServiceRequestStatusAccepted,
+	nextStatus, err := validation.Enum(
+		"Status",
+		r.FormValue("status"),
+		models.ServiceRequestStatusAccepted,
 		models.ServiceRequestStatusRejected,
-		models.ServiceRequestStatusCompleted:
-	default:
-		http.Error(
-			w,
-			"Unsupported status",
-			http.StatusBadRequest,
-		)
+		models.ServiceRequestStatusCompleted,
+	)
+	if err != nil {
+		writeValidationError(w, err)
 		return
 	}
 
-	if len(response) > 2000 {
-		http.Error(
-			w,
-			"Response must not exceed 2000 characters",
-			http.StatusBadRequest,
-		)
+	response, err := validation.OptionalMultiline(
+		"Response",
+		r.FormValue("response"),
+		2000,
+	)
+	if err != nil {
+		writeValidationError(w, err)
 		return
 	}
 
-	if nextStatus ==
-		models.ServiceRequestStatusRejected &&
-		response == "" {
-		http.Error(
-			w,
-			"A rejection reason is required",
-			http.StatusBadRequest,
-		)
+	if nextStatus == models.ServiceRequestStatusRejected && len([]rune(response)) < 3 {
+		http.Error(w, "A rejection reason of at least 3 characters is required", http.StatusBadRequest)
 		return
 	}
 
@@ -156,7 +141,8 @@ func CustomerCancelServiceRequestHandler(
 		return
 	}
 
-	requestID, err := parseServiceRequestID(
+	requestID, err := validation.PositiveInt64(
+		"Service request ID",
 		r.FormValue("request_id"),
 	)
 	if err != nil {
@@ -215,7 +201,8 @@ func ServiceRequestHistoryHandler(
 		return
 	}
 
-	requestID, err := parseServiceRequestID(
+	requestID, err := validation.PositiveInt64(
+		"Service request ID",
 		r.URL.Query().Get("id"),
 	)
 	if err != nil {
@@ -268,23 +255,6 @@ func ServiceRequestHistoryHandler(
 			StatusHistory:  history,
 		},
 	)
-}
-
-func parseServiceRequestID(
-	value string,
-) (int64, error) {
-	requestID, err := strconv.ParseInt(
-		strings.TrimSpace(value),
-		10,
-		64,
-	)
-	if err != nil || requestID <= 0 {
-		return 0, errors.New(
-			"invalid service request ID",
-		)
-	}
-
-	return requestID, nil
 }
 
 func handleServiceRequestActionError(

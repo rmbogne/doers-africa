@@ -3,68 +3,111 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/mail"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mbogne/african-doers/internal/imageupload"
 	passwordutil "github.com/mbogne/african-doers/internal/password"
 	sessionutil "github.com/mbogne/african-doers/internal/session"
+	"github.com/mbogne/african-doers/internal/validation"
 	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
 
 const (
-	registrationFormMemory = 10 << 20
-	registrationBodyLimit  = 12 << 20
-	sessionCookieName      = "session"
-	sessionDuration        = 24 * time.Hour
+	authenticationBodyLimit int64 = 64 << 10
+	registrationBodyLimit   int64 = 3 << 20
+	registrationFormMemory  int64 = 2 << 20
+	sessionCookieName             = "session"
+	sessionDuration               = 24 * time.Hour
 )
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func LoginHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	switch r.Method {
 	case http.MethodGet:
-		render(w, r, "login.html", PageData{})
+		render(
+			w,
+			r,
+			"login.html",
+			PageData{},
+		)
+
 	case http.MethodPost:
 		loginUser(w, r)
+
 	default:
-		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set(
+			"Allow",
+			http.MethodGet+", "+http.MethodPost,
+		)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
 	}
 }
 
-func loginUser(w http.ResponseWriter, r *http.Request) {
+func loginUser(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	// The global RequestSizeLimits middleware is authoritative. This local
+	// limit is defense in depth in case this handler is mounted elsewhere.
+	r.Body = http.MaxBytesReader(
+		w,
+		r.Body,
+		authenticationBodyLimit,
+	)
+
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid login request", http.StatusBadRequest)
+		writeAuthenticationParseError(
+			w,
+			err,
+			"Invalid login request",
+		)
 		return
 	}
 
-	email := normalizeEmail(r.FormValue("email"))
-	plainTextPassword := r.FormValue("password")
-	role := strings.ToLower(strings.TrimSpace(r.FormValue("role")))
-
-	if email == "" || plainTextPassword == "" {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	form, err := validatedLoginForm(r)
+	if err != nil {
+		// Keep authentication failures generic. Do not reveal whether the
+		// role, email address, or password was invalid.
+		http.Error(
+			w,
+			"Invalid credentials",
+			http.StatusUnauthorized,
+		)
 		return
 	}
 
-	switch role {
+	switch form.Role {
 	case "doer":
-		doer, err := store.DB.GetDoerByEmail(r.Context(), email)
-		if err == nil && passwordutil.Matches(doer.PasswordHash, plainTextPassword) {
+		doer, err := store.DB.GetDoerByEmail(
+			r.Context(),
+			form.Email,
+		)
+		if err == nil &&
+			passwordutil.Matches(
+				doer.PasswordHash,
+				form.Password,
+			) {
 			if err := createSession(
 				w,
 				r,
 				"doer",
 				doer.ID,
 			); err != nil {
-				log.Printf("Create doer session error: %v", err)
-
+				log.Printf(
+					"Create doer session error: %v",
+					err,
+				)
 				http.Error(
 					w,
 					"Unable to create login session",
@@ -83,16 +126,26 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "customer":
-		customer, err := store.DB.GetCustomerByEmail(r.Context(), email)
-		if err == nil && passwordutil.Matches(customer.PasswordHash, plainTextPassword) {
+		customer, err :=
+			store.DB.GetCustomerByEmail(
+				r.Context(),
+				form.Email,
+			)
+		if err == nil &&
+			passwordutil.Matches(
+				customer.PasswordHash,
+				form.Password,
+			) {
 			if err := createSession(
 				w,
 				r,
 				"customer",
 				customer.ID,
 			); err != nil {
-				log.Printf("Create customer session error: %v", err)
-
+				log.Printf(
+					"Create customer session error: %v",
+					err,
+				)
 				http.Error(
 					w,
 					"Unable to create login session",
@@ -109,99 +162,166 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-
-	default:
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-		return
 	}
 
-	// Do not reveal whether the account or password was incorrect.
-	http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	// Use the same response for an unknown account and an incorrect password.
+	http.Error(
+		w,
+		"Invalid credentials",
+		http.StatusUnauthorized,
+	)
 }
 
-func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+func RegisterHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	switch r.Method {
 	case http.MethodGet:
-		render(w, r, "register.html", PageData{})
+		render(
+			w,
+			r,
+			"register.html",
+			PageData{},
+		)
+
 	case http.MethodPost:
 		registerUser(w, r)
+
 	default:
-		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set(
+			"Allow",
+			http.MethodGet+", "+http.MethodPost,
+		)
+		http.Error(
+			w,
+			"Method not allowed",
+			http.StatusMethodNotAllowed,
+		)
 	}
 }
 
-func registerUser(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, registrationBodyLimit)
-	if err := r.ParseMultipartForm(registrationFormMemory); err != nil {
-		http.Error(w, "Invalid or oversized registration request", http.StatusBadRequest)
+func registerUser(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	// The global RequestSizeLimits middleware gives /register the upload
+	// envelope. This matching local limit is defense in depth.
+	r.Body = http.MaxBytesReader(
+		w,
+		r.Body,
+		registrationBodyLimit,
+	)
+
+	// This value controls memory use only. Larger multipart parts are written
+	// to temporary files while remaining subject to the 3 MB body limit.
+	if err := r.ParseMultipartForm(
+		registrationFormMemory,
+	); err != nil {
+		writeAuthenticationParseError(
+			w,
+			err,
+			"Invalid registration request",
+		)
 		return
 	}
 
-	role := strings.ToLower(strings.TrimSpace(r.FormValue("role")))
-	name := strings.TrimSpace(r.FormValue("name"))
-	email := normalizeEmail(r.FormValue("email"))
-	plainTextPassword := r.FormValue("password")
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
 
-	if role != "doer" && role != "customer" {
-		http.Error(w, "Invalid account role", http.StatusBadRequest)
+	form, err := validatedRegistrationForm(r)
+	if err != nil {
+		writeValidationError(w, err)
 		return
 	}
 
-	if name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
-		return
-	}
-
-	if !isValidEmail(email) {
-		http.Error(w, "A valid email address is required", http.StatusBadRequest)
-		return
-	}
-
-	passwordHash, err := passwordutil.Hash(plainTextPassword)
+	passwordHash, err :=
+		passwordutil.Hash(form.Password)
 	if err != nil {
 		switch {
-		case errors.Is(err, passwordutil.ErrTooShort),
-			errors.Is(err, passwordutil.ErrTooLong):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(
+			err,
+			passwordutil.ErrTooShort,
+		),
+			errors.Is(
+				err,
+				passwordutil.ErrTooLong,
+			):
+			http.Error(
+				w,
+				err.Error(),
+				http.StatusBadRequest,
+			)
+
 		default:
-			log.Printf("password hashing error: %v", err)
-			http.Error(w, "Unable to register account", http.StatusInternalServerError)
+			log.Printf(
+				"Password hashing error: %v",
+				err,
+			)
+			http.Error(
+				w,
+				"Unable to register account",
+				http.StatusInternalServerError,
+			)
 		}
 		return
 	}
 
-	switch role {
+	switch form.Role {
 	case "doer":
-		err = registerDoer(r, name, email, passwordHash)
+		err = registerDoer(
+			r,
+			form,
+			passwordHash,
+		)
+
 	case "customer":
 		err = store.DB.RegisterCustomer(
 			r.Context(),
 			models.Customer{
-				Name:         name,
-				Email:        email,
+				Name:         form.Name,
+				Email:        form.Email,
 				PasswordHash: passwordHash,
 			},
 		)
 	}
 
 	if err != nil {
-		log.Printf("registration failed for role %s: %v", role, err)
-		http.Error(w, "Unable to create account", http.StatusInternalServerError)
+		if validation.IsFieldError(err) {
+			writeValidationError(w, err)
+			return
+		}
+
+		log.Printf(
+			"Registration failed for role %s: %v",
+			form.Role,
+			err,
+		)
+		http.Error(
+			w,
+			"Unable to create account",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
-	http.Redirect(w, r, "/login?role="+role, http.StatusSeeOther)
+	http.Redirect(
+		w,
+		r,
+		"/login?role="+form.Role,
+		http.StatusSeeOther,
+	)
 }
 
-func registerDoer(r *http.Request, name, email, passwordHash string) error {
-	category := strings.TrimSpace(r.FormValue("category"))
-	description := strings.TrimSpace(r.FormValue("description"))
-	zipcode := strings.TrimSpace(r.FormValue("zipcode"))
-
-	radius, err := strconv.Atoi(strings.TrimSpace(r.FormValue("radius")))
-	if err != nil || radius < 0 {
-		return errors.New("invalid service radius")
+func registerDoer(
+	r *http.Request,
+	form registrationForm,
+	passwordHash string,
+) error {
+	profile, err := validatedDoerProfileForm(r)
+	if err != nil {
+		return err
 	}
 
 	flyerURL, err := saveFlyer(r)
@@ -210,20 +330,37 @@ func registerDoer(r *http.Request, name, email, passwordHash string) error {
 	}
 
 	doer := models.Doer{
-		Name:         name,
-		Email:        email,
+		Name:         form.Name,
+		Email:        form.Email,
 		PasswordHash: passwordHash,
-		Category:     category,
-		Description:  description,
-		ZipCode:      zipcode,
-		Radius:       radius,
-		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
-		TikTok:       strings.TrimSpace(r.FormValue("tiktok")),
-		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
+		Category:     profile.Category,
+		Description:  profile.Description,
+		ZipCode:      profile.PostalCode,
+		Radius:       profile.Radius,
+		Facebook:     profile.Facebook,
+		TikTok:       profile.TikTok,
+		Instagram:    profile.Instagram,
 		FlyerURL:     flyerURL,
 	}
 
-	return store.DB.RegisterDoer(r.Context(), doer)
+	if err := store.DB.RegisterDoer(
+		r.Context(),
+		doer,
+	); err != nil {
+		// Avoid leaving an orphaned image when the database insert fails.
+		if deleteErr := imageupload.Delete(
+			flyerURL,
+		); deleteErr != nil {
+			log.Printf(
+				"Delete orphaned flyer error: %v",
+				deleteErr,
+			)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func LogoutHandler(
@@ -231,7 +368,10 @@ func LogoutHandler(
 	r *http.Request,
 ) {
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
+		w.Header().Set(
+			"Allow",
+			http.MethodPost,
+		)
 		http.Error(
 			w,
 			"Method not allowed",
@@ -241,27 +381,24 @@ func LogoutHandler(
 	}
 
 	cookie, err := r.Cookie(sessionCookieName)
-	if err == nil && cookie.Value != "" {
-		tokenHash := sessionutil.Hash(cookie.Value)
+	if err == nil &&
+		strings.TrimSpace(cookie.Value) != "" {
+		tokenHash := sessionutil.Hash(
+			cookie.Value,
+		)
 
 		if err := store.DB.DeleteSession(
 			r.Context(),
 			tokenHash,
 		); err != nil {
-			log.Printf("Delete session error: %v", err)
+			log.Printf(
+				"Delete session error: %v",
+				err,
+			)
 		}
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   sessionCookieSecure(),
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Unix(0, 0),
-		MaxAge:   -1,
-	})
+	clearSessionCookie(w)
 
 	http.Redirect(
 		w,
@@ -277,84 +414,169 @@ func createSession(
 	role string,
 	userID int,
 ) error {
-	rawToken, tokenHash, err := sessionutil.NewToken()
+	rawToken, tokenHash, err :=
+		sessionutil.NewToken()
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"generate session token: %w",
+			err,
+		)
 	}
 
 	expiresAt := time.Now().
 		UTC().
 		Add(sessionDuration)
 
-	err = store.DB.CreateSession(
+	if err := store.DB.CreateSession(
 		r.Context(),
 		tokenHash,
 		role,
 		userID,
 		expiresAt,
-	)
-	if err != nil {
-		return err
+	); err != nil {
+		return fmt.Errorf(
+			"persist session: %w",
+			err,
+		)
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    rawToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   sessionCookieSecure(),
-		SameSite: http.SameSiteLaxMode,
-		Expires:  expiresAt,
-		MaxAge:   int(sessionDuration.Seconds()),
-	})
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     sessionCookieName,
+			Value:    rawToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   sessionCookieSecure(),
+			SameSite: http.SameSiteLaxMode,
+			Expires:  expiresAt,
+			MaxAge: int(
+				sessionDuration.Seconds(),
+			),
+		},
+	)
 
 	return nil
 }
 
+func clearSessionCookie(
+	w http.ResponseWriter,
+) {
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     sessionCookieName,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   sessionCookieSecure(),
+			SameSite: http.SameSiteLaxMode,
+			Expires:  time.Unix(0, 0),
+			MaxAge:   -1,
+		},
+	)
+}
+
 func sessionCookieSecure() bool {
+	rawValue := strings.TrimSpace(
+		os.Getenv(
+			"SESSION_COOKIE_SECURE",
+		),
+	)
+
+	// COOKIE_SECURE is the Phase 1.8 environment setting. Keep the older
+	// SESSION_COOKIE_SECURE name as an explicit override.
+	if rawValue == "" {
+		rawValue = strings.TrimSpace(
+			os.Getenv("COOKIE_SECURE"),
+		)
+	}
+
 	return strings.EqualFold(
-		os.Getenv("SESSION_COOKIE_SECURE"),
+		rawValue,
 		"true",
 	)
 }
 
-func normalizeEmail(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func saveFlyer(
+	r *http.Request,
+) (string, error) {
+	savedImage, imageProvided, err :=
+		imageupload.SaveOptional(
+			r,
+			"flyer",
+			"flyers",
+		)
+	if err == nil {
+		if !imageProvided {
+			return "", nil
+		}
+
+		return savedImage.URL, nil
+	}
+
+	switch {
+	case errors.Is(
+		err,
+		imageupload.ErrImageTooLarge,
+	):
+		return "", validation.FieldError{
+			Field:   "Flyer",
+			Message: "must not exceed the 2 MB image limit",
+		}
+
+	case errors.Is(
+		err,
+		imageupload.ErrUnsupportedImageType,
+	):
+		return "", validation.FieldError{
+			Field:   "Flyer",
+			Message: "must be a JPEG or PNG image",
+		}
+
+	case errors.Is(
+		err,
+		imageupload.ErrInvalidImage,
+	),
+		errors.Is(
+			err,
+			imageupload.ErrImageDimensions,
+		):
+		return "", validation.FieldError{
+			Field:   "Flyer",
+			Message: "must be a valid image with supported dimensions",
+		}
+
+	default:
+		return "", fmt.Errorf(
+			"save flyer image: %w",
+			err,
+		)
+	}
 }
 
-func isValidEmail(value string) bool {
-	address, err := mail.ParseAddress(value)
-	return err == nil && strings.EqualFold(address.Address, value)
-}
+func writeAuthenticationParseError(
+	w http.ResponseWriter,
+	err error,
+	defaultMessage string,
+) {
+	var maximumBytesError *http.MaxBytesError
 
-func saveFlyer(r *http.Request) (string, error) {
-	file, handler, err := r.FormFile("flyer")
-	if errors.Is(err, http.ErrMissingFile) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("read flyer upload: %w", err)
-	}
-	defer file.Close()
-
-	filename := time.Now().Format("20060102150405") +
-		"_" +
-		filepath.Base(handler.Filename)
-
-	if err := os.MkdirAll("static/img", 0755); err != nil {
-		return "", fmt.Errorf("create image directory: %w", err)
+	if errors.As(
+		err,
+		&maximumBytesError,
+	) {
+		http.Error(
+			w,
+			"Request body is too large",
+			http.StatusRequestEntityTooLarge,
+		)
+		return
 	}
 
-	destinationPath := filepath.Join("static", "img", filename)
-	destination, err := os.Create(destinationPath)
-	if err != nil {
-		return "", fmt.Errorf("create flyer file: %w", err)
-	}
-	defer destination.Close()
-
-	if _, err := io.Copy(destination, file); err != nil {
-		return "", fmt.Errorf("save flyer file: %w", err)
-	}
-
-	return "/static/img/" + filename, nil
+	http.Error(
+		w,
+		defaultMessage,
+		http.StatusBadRequest,
+	)
 }

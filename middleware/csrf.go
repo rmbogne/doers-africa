@@ -152,6 +152,20 @@ func CSRF(next http.Handler) http.Handler {
 					r,
 				)
 				if err != nil {
+					var maximumBytesError *http.MaxBytesError
+
+					if errors.As(
+						err,
+						&maximumBytesError,
+					) {
+						http.Error(
+							w,
+							"Request body is too large",
+							http.StatusRequestEntityTooLarge,
+						)
+						return
+					}
+
 					if errors.Is(
 						err,
 						errCSRFMulitpartTooLarge,

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/mbogne/african-doers/internal/mongoid"
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/store"
 )
@@ -86,10 +87,11 @@ func CustomerRSVPHandler(
 		eventID = eventIDFromPath(r.URL.Path)
 	}
 
-	if eventID == "" {
+	eventID, err := mongoid.Normalize(eventID)
+	if err != nil {
 		http.Error(
 			w,
-			"Missing event ID",
+			"Invalid event ID",
 			http.StatusBadRequest,
 		)
 		return

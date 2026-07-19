@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	defaultServerAddress        = ":8080"
-	defaultMongoDatabase        = "africandoers"
-	defaultDatabaseTimeout      = 10 * time.Second
-	defaultPostgresMaxOpenConns = 20
-	defaultPostgresMaxIdleConns = 5
-	defaultPostgresConnLifetime = 30 * time.Minute
-	defaultCSRFTTL              = 12 * time.Hour
-	defaultRequestBodyMaxBytes  = 12 << 20
-	defaultMultipartMemoryBytes = 2 << 20
-	minimumCSRFSecretLength     = 32
+	defaultServerAddress               = ":8080"
+	defaultMongoDatabase               = "africandoers"
+	defaultDatabaseTimeout             = 10 * time.Second
+	defaultPostgresMaxOpenConns        = 20
+	defaultPostgresMaxIdleConns        = 5
+	defaultPostgresConnLifetime        = 30 * time.Minute
+	defaultCSRFTTL                     = 12 * time.Hour
+	defaultRequestBodyMaxBytes         = 3 << 20
+	defaultStandardRequestBodyMaxBytes = 64 << 10
+	defaultMultipartMemoryBytes        = 2 << 20
+	minimumCSRFSecretLength            = 32
 )
 
 type Config struct {
@@ -39,11 +40,13 @@ type Config struct {
 
 	DatabaseConnectTimeout time.Duration
 
-	CSRFSecret           string
-	CSRFCookieSecure     bool
-	CSRFTTL              time.Duration
-	RequestBodyMaxBytes  int64
-	MultipartMemoryBytes int64
+	CSRFSecret                  string
+	CSRFCookieSecure            bool
+	CSRFTTL                     time.Duration
+	RequestBodyMaxBytes         int64
+	StandardRequestBodyMaxBytes int64
+	UploadRequestBodyMaxBytes   int64
+	MultipartMemoryBytes        int64
 }
 
 // Load reads configuration from process environment variables.
@@ -185,13 +188,26 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	requestBodyMaxBytes, err := getInt64(
-		"REQUEST_BODY_MAX_BYTES",
-		defaultRequestBodyMaxBytes,
+	standardRequestBodyMaxBytes, err := getInt64(
+		"STANDARD_REQUEST_BODY_MAX_BYTES",
+		defaultStandardRequestBodyMaxBytes,
 	)
 	if err != nil {
 		return Config{}, err
 	}
+
+	uploadRequestBodyMaxBytes, err := getInt64(
+		"UPLOAD_REQUEST_BODY_MAX_BYTES",
+		getInt64Fallback(
+			"REQUEST_BODY_MAX_BYTES",
+			defaultRequestBodyMaxBytes,
+		),
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	requestBodyMaxBytes := uploadRequestBodyMaxBytes
 
 	multipartMemoryBytes, err := getInt64(
 		"MULTIPART_MEMORY_BYTES",
@@ -201,10 +217,17 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	if multipartMemoryBytes >
-		requestBodyMaxBytes {
+	if standardRequestBodyMaxBytes >
+		uploadRequestBodyMaxBytes {
 		return Config{}, fmt.Errorf(
-			"MULTIPART_MEMORY_BYTES cannot exceed REQUEST_BODY_MAX_BYTES",
+			"STANDARD_REQUEST_BODY_MAX_BYTES cannot exceed UPLOAD_REQUEST_BODY_MAX_BYTES",
+		)
+	}
+
+	if multipartMemoryBytes >
+		uploadRequestBodyMaxBytes {
+		return Config{}, fmt.Errorf(
+			"MULTIPART_MEMORY_BYTES cannot exceed UPLOAD_REQUEST_BODY_MAX_BYTES",
 		)
 	}
 
@@ -229,11 +252,13 @@ func Load() (Config, error) {
 
 		DatabaseConnectTimeout: databaseTimeout,
 
-		CSRFSecret:           csrfSecret,
-		CSRFCookieSecure:     cookieSecure,
-		CSRFTTL:              csrfTTL,
-		RequestBodyMaxBytes:  requestBodyMaxBytes,
-		MultipartMemoryBytes: multipartMemoryBytes,
+		CSRFSecret:                  csrfSecret,
+		CSRFCookieSecure:            cookieSecure,
+		CSRFTTL:                     csrfTTL,
+		RequestBodyMaxBytes:         requestBodyMaxBytes,
+		StandardRequestBodyMaxBytes: standardRequestBodyMaxBytes,
+		UploadRequestBodyMaxBytes:   uploadRequestBodyMaxBytes,
+		MultipartMemoryBytes:        multipartMemoryBytes,
 	}, nil
 }
 
@@ -307,6 +332,29 @@ func getInt(
 	}
 
 	return value, nil
+}
+
+func getInt64Fallback(
+	name string,
+	defaultValue int64,
+) int64 {
+	rawValue := strings.TrimSpace(
+		os.Getenv(name),
+	)
+	if rawValue == "" {
+		return defaultValue
+	}
+
+	value, err := strconv.ParseInt(
+		rawValue,
+		10,
+		64,
+	)
+	if err != nil || value <= 0 {
+		return defaultValue
+	}
+
+	return value
 }
 
 func getInt64(

@@ -102,3 +102,25 @@ func TestLoadRequiresSecureCookiesInProduction(
 		)
 	}
 }
+
+func TestLoadRequestSizeDefaults(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("POSTGRES_DSN", "host=localhost dbname=test")
+	t.Setenv("MONGO_URI", "mongodb://localhost:27017")
+	t.Setenv("CSRF_SECRET", strings.Repeat("c", 32))
+	t.Setenv("COOKIE_SECURE", "false")
+	t.Setenv("STANDARD_REQUEST_BODY_MAX_BYTES", "")
+	t.Setenv("UPLOAD_REQUEST_BODY_MAX_BYTES", "")
+	t.Setenv("REQUEST_BODY_MAX_BYTES", "")
+
+	loadedConfig, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loadedConfig.StandardRequestBodyMaxBytes != 64<<10 {
+		t.Fatalf("unexpected standard body limit: %d", loadedConfig.StandardRequestBodyMaxBytes)
+	}
+	if loadedConfig.UploadRequestBodyMaxBytes != 3<<20 {
+		t.Fatalf("unexpected upload body limit: %d", loadedConfig.UploadRequestBodyMaxBytes)
+	}
+}

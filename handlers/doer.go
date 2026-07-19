@@ -4,13 +4,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/mbogne/african-doers/internal/imageupload"
 	"github.com/mbogne/african-doers/internal/mongoid"
 	"github.com/mbogne/african-doers/middleware"
-	"github.com/mbogne/african-doers/models"
 	"github.com/mbogne/african-doers/store"
 )
 
@@ -113,6 +111,13 @@ func DoerNewEventHandler(
 		}
 		defer cleanupMultipartForm(r)
 
+		event, err := validatedEventForm(r)
+		if err != nil {
+			writeValidationError(w, err)
+			return
+		}
+		event.DoerID = doerID
+
 		uploadedImage, imageProvided, err :=
 			imageupload.SaveOptional(
 				r,
@@ -124,39 +129,8 @@ func DoerNewEventHandler(
 			return
 		}
 
-		event := models.Event{
-			Title: strings.TrimSpace(
-				r.FormValue("title"),
-			),
-			Description: strings.TrimSpace(
-				r.FormValue("description"),
-			),
-			Date: strings.TrimSpace(
-				r.FormValue("date"),
-			),
-			Location: strings.TrimSpace(
-				r.FormValue("location"),
-			),
-			DoerID: doerID,
-		}
-
 		if imageProvided {
-			event.ImageURL =
-				uploadedImage.URL
-		}
-
-		if event.Title == "" ||
-			event.Date == "" ||
-			event.Location == "" {
-			removeUploadedImage(
-				uploadedImage.URL,
-			)
-			http.Error(
-				w,
-				"Title, date, and location are required",
-				http.StatusBadRequest,
-			)
-			return
+			event.ImageURL = uploadedImage.URL
 		}
 
 		if _, err := store.DB.AddEvent(
@@ -216,19 +190,12 @@ func DoerNewServiceHandler(
 		}
 		defer cleanupMultipartForm(r)
 
-		price, err := strconv.Atoi(
-			strings.TrimSpace(
-				r.FormValue("price"),
-			),
-		)
-		if err != nil || price < 0 {
-			http.Error(
-				w,
-				"Price must be a non-negative whole number",
-				http.StatusBadRequest,
-			)
+		service, err := validatedServiceForm(r)
+		if err != nil {
+			writeValidationError(w, err)
 			return
 		}
+		service.DoerID = doerID
 
 		uploadedImage, imageProvided, err :=
 			imageupload.SaveOptional(
@@ -241,33 +208,8 @@ func DoerNewServiceHandler(
 			return
 		}
 
-		service := models.Service{
-			Title: strings.TrimSpace(
-				r.FormValue("title"),
-			),
-			Description: strings.TrimSpace(
-				r.FormValue("description"),
-			),
-			Price:  price,
-			DoerID: doerID,
-		}
-
 		if imageProvided {
-			service.ImageURL =
-				uploadedImage.URL
-		}
-
-		if service.Title == "" ||
-			service.Description == "" {
-			removeUploadedImage(
-				uploadedImage.URL,
-			)
-			http.Error(
-				w,
-				"Title and description are required",
-				http.StatusBadRequest,
-			)
-			return
+			service.ImageURL = uploadedImage.URL
 		}
 
 		if _, err := store.DB.AddService(
@@ -357,6 +299,12 @@ func DoerEditEventHandler(
 		}
 		defer cleanupMultipartForm(r)
 
+		event, err := validatedEventForm(r)
+		if err != nil {
+			writeValidationError(w, err)
+			return
+		}
+
 		uploadedImage, imageProvided, err :=
 			imageupload.SaveOptional(
 				r,
@@ -381,35 +329,7 @@ func DoerEditEventHandler(
 			imageURL = uploadedImage.URL
 		}
 
-		event := models.Event{
-			Title: strings.TrimSpace(
-				r.FormValue("title"),
-			),
-			Description: strings.TrimSpace(
-				r.FormValue("description"),
-			),
-			Date: strings.TrimSpace(
-				r.FormValue("date"),
-			),
-			Location: strings.TrimSpace(
-				r.FormValue("location"),
-			),
-			ImageURL: imageURL,
-		}
-
-		if event.Title == "" ||
-			event.Date == "" ||
-			event.Location == "" {
-			removeUploadedImage(
-				uploadedImage.URL,
-			)
-			http.Error(
-				w,
-				"Title, date, and location are required",
-				http.StatusBadRequest,
-			)
-			return
-		}
+		event.ImageURL = imageURL
 
 		if err := store.DB.UpdateEventOwned(
 			r.Context(),
@@ -506,17 +426,9 @@ func DoerEditServiceHandler(
 		}
 		defer cleanupMultipartForm(r)
 
-		price, err := strconv.Atoi(
-			strings.TrimSpace(
-				r.FormValue("price"),
-			),
-		)
-		if err != nil || price < 0 {
-			http.Error(
-				w,
-				"Price must be a non-negative whole number",
-				http.StatusBadRequest,
-			)
+		service, err := validatedServiceForm(r)
+		if err != nil {
+			writeValidationError(w, err)
 			return
 		}
 
@@ -544,29 +456,7 @@ func DoerEditServiceHandler(
 			imageURL = uploadedImage.URL
 		}
 
-		service := models.Service{
-			Title: strings.TrimSpace(
-				r.FormValue("title"),
-			),
-			Description: strings.TrimSpace(
-				r.FormValue("description"),
-			),
-			Price:    price,
-			ImageURL: imageURL,
-		}
-
-		if service.Title == "" ||
-			service.Description == "" {
-			removeUploadedImage(
-				uploadedImage.URL,
-			)
-			http.Error(
-				w,
-				"Title and description are required",
-				http.StatusBadRequest,
-			)
-			return
-		}
+		service.ImageURL = imageURL
 
 		if err := store.DB.UpdateServiceOwned(
 			r.Context(),

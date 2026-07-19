@@ -279,8 +279,11 @@ func main() {
 
 	// Auth must execute before RequireRole.
 	handler := middleware.Logger(
-		middleware.RequestBodyLimit(
-			middleware.DefaultMaximumRequestBodyBytes,
+		middleware.RequestSizeLimits(
+			middleware.RequestSizeConfig{
+				StandardMaxBytes: applicationConfig.StandardRequestBodyMaxBytes,
+				UploadMaxBytes:   applicationConfig.UploadRequestBodyMaxBytes,
+			},
 			middleware.CSRF(
 				middleware.Auth(mux),
 			),

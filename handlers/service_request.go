@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
-	"unicode/utf8"
 
 	"github.com/mbogne/african-doers/middleware"
 	"github.com/mbogne/african-doers/models"
@@ -46,64 +44,15 @@ func CustomerCreateServiceRequestHandler(
 		return
 	}
 
-	serviceID := strings.TrimSpace(
-		r.FormValue("service_id"),
-	)
-	idempotencyToken := strings.TrimSpace(
-		r.FormValue("idempotency_token"),
-	)
-	message := strings.TrimSpace(
-		r.FormValue("message"),
-	)
-	requestedDateText := strings.TrimSpace(
-		r.FormValue("requested_date"),
-	)
-
-	if serviceID == "" ||
-		idempotencyToken == "" {
-		http.Error(
-			w,
-			"Missing service request information",
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	messageLength := utf8.RuneCountInString(message)
-	if messageLength < 10 || messageLength > 2000 {
-		http.Error(
-			w,
-			"Request description must contain between 10 and 2000 characters",
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	if requestedDateText == "" ||
-		requestedDateText <
-			time.Now().Format("2006-01-02") {
-		http.Error(
-			w,
-			"Requested date must be today or later",
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	requestedDate, err := time.Parse(
-		"2006-01-02",
-		requestedDateText,
-	)
+	form, err := validatedServiceRequestForm(r)
 	if err != nil {
-		http.Error(
-			w,
-			"Invalid requested date",
-			http.StatusBadRequest,
-		)
+		writeValidationError(w, err)
 		return
 	}
 
-	service, found := store.DB.GetService(serviceID)
+	service, found := store.DB.GetService(
+		form.ServiceID,
+	)
 	if !found {
 		http.Error(
 			w,
@@ -123,20 +72,20 @@ func CustomerCreateServiceRequestHandler(
 	}
 
 	serviceRequest := models.ServiceRequest{
-		ServiceID:     serviceID,
+		ServiceID:     form.ServiceID,
 		ServiceTitle:  strings.TrimSpace(service.Title),
 		ServicePrice:  service.Price,
 		CustomerID:    customerID,
 		DoerID:        service.DoerID,
-		Message:       message,
-		RequestedDate: requestedDate,
+		Message:       form.Message,
+		RequestedDate: form.RequestedDate,
 	}
 
 	requestID, replayed, err :=
 		store.DB.CreateServiceRequestIdempotent(
 			r.Context(),
 			serviceRequest,
-			idempotencyToken,
+			form.IdempotencyToken,
 		)
 	if err != nil {
 		handleIdempotentRequestError(w, err)
@@ -158,7 +107,7 @@ func CustomerCreateServiceRequestHandler(
 	http.Redirect(
 		w,
 		r,
-		"/service/"+serviceID+
+		"/service/"+form.ServiceID+
 			"?request="+requestResult,
 		http.StatusSeeOther,
 	)

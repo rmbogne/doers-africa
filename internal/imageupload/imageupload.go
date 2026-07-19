@@ -415,6 +415,9 @@ func safeCategory(
 	case "services":
 		return "services", nil
 
+	case "flyers":
+		return "flyers", nil
+
 	default:
 		return "", ErrInvalidImageCategory
 	}
