@@ -5,7 +5,7 @@
         margin: 0 auto;
         padding: 2rem;
         background: var(--bg-card);
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid var(--border-soft);
         border-radius: 1rem;
     "
 >
@@ -39,12 +39,14 @@
                     padding: 0.45rem 0.75rem;
                     margin-bottom: 0.75rem;
                     border-radius: 0.5rem;
-                    background: rgba(255,255,255,0.08);
+                    background: var(--surface-accent);
                     font-weight: 700;
                 "
             >
                 {{.Event.Date}}
             </div>
+
+
 
             <h1 style="margin: 0 0 0.75rem;">
                 {{.Event.Title}}
@@ -59,35 +61,53 @@
             </p>
         </div>
 
-        {{if eq .Role "customer"}}
-            {{if .HasRSVPd}}
-                <span class="btn btn-secondary">
-                    RSVP Confirmed
-                </span>
-            {{else}}
-                <form
-                    action="/event/{{.Event.ID.Hex}}/rsvp"
-                    method="POST"
-                >
-                    <input
-                        type="hidden"
-                        name="csrf_token"
-                        value="{{.CSRFToken}}"
+        <div class="event-reservation-actions">
+            {{if eq .Role "customer"}}
+                {{if .HasRSVPd}}
+                    <span class="btn btn-secondary">
+                        RSVP Confirmed
+                    </span>
+                {{else}}
+                    <form
+                        action="/event/{{.Event.ID.Hex}}/rsvp"
+                        method="POST"
                     >
+                        <input
+                            type="hidden"
+                            name="csrf_token"
+                            value="{{.CSRFToken}}"
+                        >
 
-                    <button type="submit" class="btn btn-primary">
-                        RSVP
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                        >
+                            RSVP
+                        </button>
+                    </form>
+                {{end}}
+
+            {{else if eq .Role "doer"}}
+                <span class="btn btn-secondary">
+                    Doers cannot RSVP
+                </span>
+
+            {{else}}
+                <a
+                    href="/login?role=customer"
+                    class="btn btn-primary"
+                >
+                    Log in to Reserve
+                </a>
             {{end}}
-        {{end}}
+        </div>
     </div>
 
     <div
         style="
             margin-top: 2rem;
             padding-top: 1.5rem;
-            border-top: 1px solid rgba(255,255,255,0.1);
+            border-top: 1px solid var(--border-soft);
             line-height: 1.8;
         "
     >

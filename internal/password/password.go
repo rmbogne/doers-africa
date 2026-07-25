@@ -5,54 +5,67 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
+
 )
 
 const (
-	minimumPasswordLength = 8
-	maximumPasswordBytes  = 72
+	MinimumLength = 12
+	MaximumBytes  = 72
 )
 
 var (
 	ErrTooShort = fmt.Errorf(
 		"password must contain at least %d characters",
-		minimumPasswordLength,
+		MinimumLength,
 	)
+
 	ErrTooLong = fmt.Errorf(
 		"password must not exceed %d bytes",
-		maximumPasswordBytes,
+		MaximumBytes,
 	)
 )
 
-// Hash validates and hashes a plaintext password with bcrypt.
+func Validate(plainText string) error {
+	if utf8.RuneCountInString(plainText) <
+		MinimumLength {
+		return ErrTooShort
+	}
+
+	if len([]byte(plainText)) > MaximumBytes {
+		return ErrTooLong
+	}
+
+	return nil
+}
+
 func Hash(plainText string) (string, error) {
-	if utf8.RuneCountInString(plainText) < minimumPasswordLength {
-		return "", ErrTooShort
+	if err := Validate(plainText); err != nil {
+		return "", err
 	}
 
-	// bcrypt rejects passwords longer than 72 bytes.
-	if len([]byte(plainText)) > maximumPasswordBytes {
-		return "", ErrTooLong
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword(
-		[]byte(plainText),
-		bcrypt.DefaultCost,
-	)
+	hashedPassword, err :=
+		bcrypt.GenerateFromPassword(
+			[]byte(plainText),
+			bcrypt.DefaultCost,
+		)
 	if err != nil {
-		return "", fmt.Errorf("generate password hash: %w", err)
+		return "", fmt.Errorf(
+			"generate password hash: %w",
+			err,
+		)
 	}
 
 	return string(hashedPassword), nil
 }
 
-// Matches reports whether a plaintext password matches a bcrypt hash.
-func Matches(passwordHash, plainTextPassword string) bool {
-	if passwordHash == "" || plainTextPassword == "" {
-		return false
-	}
-
-	return bcrypt.CompareHashAndPassword(
+func Matches(
+	passwordHash string,
+	plainTextPassword string,
+) bool {
+	err := bcrypt.CompareHashAndPassword(
 		[]byte(passwordHash),
 		[]byte(plainTextPassword),
-	) == nil
+	)
+
+	return err == nil
 }

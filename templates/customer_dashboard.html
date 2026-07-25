@@ -21,7 +21,7 @@
     .section-header {
         margin-bottom: 1.25rem;
         padding-bottom: 1rem;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border-bottom: 1px solid var(--border-soft);
     }
 
     .request-carousel {
@@ -38,7 +38,7 @@
         flex: 0 0 min(390px, 88vw);
         scroll-snap-align: start;
         background: var(--bg-card);
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid var(--border-soft);
         border-radius: 1rem;
         padding: 1.35rem;
     }
@@ -47,7 +47,7 @@
         display: inline-block;
         padding: 0.35rem 0.7rem;
         border-radius: 9999px;
-        background: rgba(255,255,255,0.08);
+        background: var(--surface-accent);
         font-size: 0.8rem;
         font-weight: 700;
         text-transform: capitalize;
@@ -62,7 +62,7 @@
     }
 
     .request-metric {
-        background: rgba(255,255,255,0.04);
+        background: var(--surface-subtle);
         border-radius: 0.6rem;
         padding: 0.8rem;
     }
@@ -74,7 +74,7 @@
         flex-wrap: wrap;
         margin-top: 1rem;
         padding-top: 1rem;
-        border-top: 1px solid rgba(255,255,255,0.08);
+        border-top: 1px solid var(--surface-accent);
     }
 
     .carousel-controls {
@@ -92,7 +92,7 @@
     .request-table-wrapper {
         overflow-x: auto;
         background: var(--bg-card);
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid var(--border-soft);
         border-radius: 1rem;
     }
 
@@ -107,11 +107,11 @@
         padding: 0.9rem 1rem;
         text-align: left;
         vertical-align: top;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
+        border-bottom: 1px solid var(--surface-accent);
     }
 
     .request-table th {
-        background: rgba(255,255,255,0.05);
+        background: var(--surface-soft);
         white-space: nowrap;
     }
 
@@ -121,7 +121,7 @@
 
     .empty-panel {
         background: var(--bg-card);
-        border: 1px dashed rgba(255,255,255,0.18);
+        border: 1px dashed var(--border-strong);
         border-radius: 1rem;
         padding: 2rem;
         text-align: center;
@@ -135,7 +135,7 @@
 
     .event-card {
         background: var(--bg-card);
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid var(--border-soft);
         border-radius: 1rem;
         padding: 1.5rem;
     }
@@ -151,7 +151,7 @@
     <header class="dashboard-header">
         <div>
             <h1 style="font-size: 2.25rem; margin: 0 0 0.5rem;">
-                Customer Dashboard
+                Welcome, {{.UserName}}
             </h1>
             <p style="color: var(--text-muted); margin: 0;">
                 Track open service requests and review your complete request history.
@@ -266,7 +266,7 @@
                                     margin-top: 1rem;
                                     padding: 0.9rem 1rem;
                                     border-left: 3px solid var(--accent);
-                                    background: rgba(255,255,255,0.05);
+                                    background: var(--surface-soft);
                                     border-radius: 0.4rem;
                                 "
                             >
@@ -446,7 +446,7 @@
                                 padding: 0.45rem 0.7rem;
                                 margin-bottom: 1rem;
                                 border-radius: 0.5rem;
-                                background: rgba(255,255,255,0.08);
+                                background: var(--surface-accent);
                                 font-weight: 700;
                             "
                         >

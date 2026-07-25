@@ -22,29 +22,6 @@ type serviceRequestForm struct {
 	RequestedDate    time.Time
 }
 
-type loginForm struct {
-	Role     string
-	Email    string
-	Password string
-}
-
-type registrationForm struct {
-	Role     string
-	Name     string
-	Email    string
-	Password string
-}
-
-type doerProfileForm struct {
-	Category    string
-	Description string
-	PostalCode  string
-	Radius      int
-	Facebook    string
-	TikTok      string
-	Instagram   string
-}
-
 func validatedEventForm(r *http.Request) (models.Event, error) {
 	title, err := validation.SingleLine("Title", r.FormValue("title"), 3, 150)
 	if err != nil {
@@ -108,82 +85,6 @@ func validatedServiceRequestForm(r *http.Request) (serviceRequestForm, error) {
 		IdempotencyToken: idempotencyToken,
 		Message:          message,
 		RequestedDate:    requestedDate,
-	}, nil
-}
-
-func validatedLoginForm(r *http.Request) (loginForm, error) {
-	role, err := validation.Enum("Role", r.FormValue("role"), "doer", "customer")
-	if err != nil {
-		return loginForm{}, err
-	}
-	email, err := validation.Email(r.FormValue("email"))
-	if err != nil {
-		return loginForm{}, err
-	}
-	password, err := validation.Secret("Password", r.FormValue("password"), 1, 128)
-	if err != nil {
-		return loginForm{}, err
-	}
-	return loginForm{Role: role, Email: email, Password: password}, nil
-}
-
-func validatedRegistrationForm(r *http.Request) (registrationForm, error) {
-	role, err := validation.Enum("Role", r.FormValue("role"), "doer", "customer")
-	if err != nil {
-		return registrationForm{}, err
-	}
-	name, err := validation.SingleLine("Name", r.FormValue("name"), 2, 100)
-	if err != nil {
-		return registrationForm{}, err
-	}
-	email, err := validation.Email(r.FormValue("email"))
-	if err != nil {
-		return registrationForm{}, err
-	}
-	password, err := validation.Secret("Password", r.FormValue("password"), 12, 128)
-	if err != nil {
-		return registrationForm{}, err
-	}
-	return registrationForm{Role: role, Name: name, Email: email, Password: password}, nil
-}
-
-func validatedDoerProfileForm(r *http.Request) (doerProfileForm, error) {
-	category, err := validation.SingleLine("Category", r.FormValue("category"), 2, 100)
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	description, err := validation.Multiline("Description", r.FormValue("description"), 10, 2000)
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	postalCode, err := validation.OptionalPostalCode(r.FormValue("zipcode"))
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	radius, err := validation.Integer("Service radius", r.FormValue("radius"), 0, maximumRadius)
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	facebook, err := validation.OptionalURL("Facebook URL", r.FormValue("facebook"))
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	tikTok, err := validation.OptionalURL("TikTok URL", r.FormValue("tiktok"))
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	instagram, err := validation.OptionalURL("Instagram URL", r.FormValue("instagram"))
-	if err != nil {
-		return doerProfileForm{}, err
-	}
-	return doerProfileForm{
-		Category:    category,
-		Description: description,
-		PostalCode:  postalCode,
-		Radius:      radius,
-		Facebook:    facebook,
-		TikTok:      tikTok,
-		Instagram:   instagram,
 	}, nil
 }
 

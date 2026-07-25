@@ -59,7 +59,7 @@
                         border:
                             1px solid
                             {{if .IsRead}}
-                                rgba(255,255,255,0.1)
+                                var(--border-soft)
                             {{else}}
                                 rgba(59,130,246,0.40)
                             {{end}};
@@ -161,7 +161,7 @@
         <div
             style="
                 background: var(--bg-card);
-                border: 1px dashed rgba(255,255,255,0.18);
+                border: 1px dashed var(--border-strong);
                 border-radius: 1rem;
                 padding: 2.5rem;
                 text-align: center;

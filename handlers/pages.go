@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"html/template"
 	"log"
 	"net/http"
-	"sort"
 	"strings"
 
 	"github.com/mbogne/african-doers/middleware"
@@ -18,15 +18,26 @@ type ServiceView struct {
 	Doer    models.Doer
 }
 
+type FeaturedEventView struct {
+	Event     models.Event
+	RSVPCount int
+}
+
 type PageData struct {
-	Role            string
-	Events          []models.Event
-	Doers           []models.Doer
-	Services        []models.Service
-	ServiceViews    []ServiceView
-	ServiceRequests []models.ServiceRequest
-	EventRSVPs      []models.EventRSVP
-	StatusHistory   []models.ServiceRequestStatusHistory
+	Role                   string
+	UserName               string
+	LoginRole              string
+	RegistrationSuccessful bool
+	RegistrationError      string
+	RegistrationRole       string
+	Events                 []models.Event
+	FeaturedEvents         []FeaturedEventView
+	Doers                  []models.Doer
+	Services               []models.Service
+	ServiceViews           []ServiceView
+	ServiceRequests        []models.ServiceRequest
+	EventRSVPs             []models.EventRSVP
+	StatusHistory          []models.ServiceRequestStatusHistory
 
 	Event          models.Event
 	Service        models.Service
@@ -40,6 +51,12 @@ type PageData struct {
 	RequestSubmissionToken string
 	CSRFToken              string
 	UploadError            string
+
+	PasswordResetError      string
+	PasswordResetSuccess    string
+	PasswordResetSuccessful bool
+	ResetToken              string
+	ResetRole               string
 }
 
 func render(
@@ -48,9 +65,17 @@ func render(
 	templateName string,
 	data PageData,
 ) {
-	role, _ := middleware.GetRoleAndID(r)
+	role, userID := middleware.GetRoleAndID(r)
 	data.Role = role
 	data.CSRFToken = middleware.CSRFToken(r)
+
+	if data.UserName == "" {
+		data.UserName = authenticatedUserName(
+			r.Context(),
+			role,
+			userID,
+		)
+	}
 
 	if data.UploadError == "" {
 		data.UploadError = uploadErrorMessage(
@@ -136,25 +161,167 @@ func HomeHandler(
 		return
 	}
 
-	events := store.DB.GetAllEvents()
+	const (
+		maximumHomeEvents     = 5
+		rankingCandidateLimit = 100
+		upcomingEventLimit    = 200
+	)
 
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].Date < events[j].Date
-	})
+	upcomingEvents :=
+		store.DB.GetVisibleUpcomingEvents(
+			r.Context(),
+			0,
+			upcomingEventLimit,
+		)
 
-	const maximumHomeEvents = 5
-	if len(events) > maximumHomeEvents {
-		events = events[:maximumHomeEvents]
+	rankings, err :=
+		store.DB.GetTopEventRSVPRankings(
+			r.Context(),
+			rankingCandidateLimit,
+		)
+	if err != nil {
+		log.Printf(
+			"GetTopEventRSVPRankings error: %v",
+			err,
+		)
+		rankings = nil
 	}
+
+	featuredEvents := selectFeaturedEvents(
+		upcomingEvents,
+		rankings,
+		maximumHomeEvents,
+	)
 
 	render(
 		w,
 		r,
 		"home.html",
 		PageData{
-			Events: events,
+			FeaturedEvents: featuredEvents,
 		},
 	)
+}
+
+func selectFeaturedEvents(
+	upcomingEvents []models.Event,
+	rankings []store.EventRSVPRanking,
+	maximumEvents int,
+) []FeaturedEventView {
+	if maximumEvents <= 0 {
+		return []FeaturedEventView{}
+	}
+
+	eventsByID := make(
+		map[string]models.Event,
+		len(upcomingEvents),
+	)
+
+	for _, event := range upcomingEvents {
+		if event.ID.IsZero() {
+			continue
+		}
+
+		eventsByID[event.ID.Hex()] = event
+	}
+
+	featuredEvents := make(
+		[]FeaturedEventView,
+		0,
+		maximumEvents,
+	)
+	selectedEventIDs := make(map[string]struct{})
+
+	for _, ranking := range rankings {
+		if len(featuredEvents) >= maximumEvents {
+			break
+		}
+
+		event, found := eventsByID[ranking.EventID]
+		if !found {
+			// Ignore RSVP records whose MongoDB event was removed, archived,
+			// or is no longer upcoming.
+			continue
+		}
+
+		featuredEvents = append(
+			featuredEvents,
+			FeaturedEventView{
+				Event:     event,
+				RSVPCount: ranking.RSVPCount,
+			},
+		)
+		selectedEventIDs[ranking.EventID] =
+			struct{}{}
+	}
+
+	// Fill empty positions with upcoming events that currently have no RSVPs.
+	// GetVisibleUpcomingEvents already returns them in date order.
+	for _, event := range upcomingEvents {
+		if len(featuredEvents) >= maximumEvents {
+			break
+		}
+
+		if event.ID.IsZero() {
+			continue
+		}
+
+		eventID := event.ID.Hex()
+		if _, selected :=
+			selectedEventIDs[eventID]; selected {
+			continue
+		}
+
+		featuredEvents = append(
+			featuredEvents,
+			FeaturedEventView{
+				Event: event,
+			},
+		)
+		selectedEventIDs[eventID] =
+			struct{}{}
+	}
+
+	return featuredEvents
+}
+
+func authenticatedUserName(
+	ctx context.Context,
+	role string,
+	userID int,
+) string {
+	if userID <= 0 {
+		return ""
+	}
+
+	switch role {
+	case "doer":
+		doer, found := store.DB.GetDoer(userID)
+		if !found {
+			return ""
+		}
+
+		return doer.Name
+
+	case "customer":
+		customer, err :=
+			store.DB.GetCustomerByID(
+				ctx,
+				userID,
+			)
+		if err != nil {
+			log.Printf(
+				"GetCustomerByID for page data error: %v",
+				err,
+			)
+			return ""
+		}
+
+		return customer.Name
+
+	default:
+		return ""
+	}
 }
 
 func ProspectsHandler(
@@ -224,7 +391,10 @@ func EventDetailHandler(
 	r *http.Request,
 ) {
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+		w.Header().Set(
+			"Allow",
+			http.MethodGet,
+		)
 		http.Error(
 			w,
 			"Method not allowed",
@@ -240,37 +410,47 @@ func EventDetailHandler(
 		),
 	)
 
-	if eventID == "" ||
-		strings.Contains(eventID, "/") {
-		http.NotFound(w, r)
+	if eventID == "" {
+		http.Error(
+			w,
+			"Missing event ID",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
 	event, found := store.DB.GetEvent(eventID)
 	if !found {
-		http.NotFound(w, r)
-		return
-	}
-
-	doer, found := store.DB.GetDoer(event.DoerID)
-	if !found {
 		http.Error(
 			w,
-			"Event provider not found",
+			"Event not found",
 			http.StatusNotFound,
 		)
 		return
 	}
 
-	role, customerID :=
+	doer, found := store.DB.GetDoer(
+		event.DoerID,
+	)
+	if !found {
+		http.Error(
+			w,
+			"Event organizer not found",
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	role, userID :=
 		middleware.GetRoleAndID(r)
 
 	hasRSVPd := false
+
 	if role == "customer" &&
-		customerID > 0 {
+		userID > 0 {
 		hasRSVPd = store.DB.HasRSVPd(
 			eventID,
-			customerID,
+			userID,
 		)
 	}
 
@@ -279,6 +459,7 @@ func EventDetailHandler(
 		r,
 		"event_detail.html",
 		PageData{
+			Role:     role,
 			Event:    event,
 			Doer:     doer,
 			DoerName: doer.Name,

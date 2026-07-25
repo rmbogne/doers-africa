@@ -130,6 +130,16 @@ func main() {
 		handlers.LogoutHandler,
 	)
 
+	mux.HandleFunc(
+		"/forgot-password",
+		handlers.ForgotPasswordHandler,
+	)
+
+	mux.HandleFunc(
+		"/reset-password",
+		handlers.ResetPasswordHandler,
+	)
+
 	// ----------------- DOER ROUTES -----------------
 
 	mux.Handle(

@@ -59,7 +59,7 @@
         background: var(--bg-card);
         padding: 3rem;
         border-radius: 1rem;
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid var(--border-soft);
     "
 >
     {{if .Service.ImageURL}}
@@ -117,7 +117,7 @@
                         display: grid;
                         gap: 1rem;
                         padding: 1.25rem;
-                        background: rgba(255,255,255,0.04);
+                        background: var(--surface-subtle);
                         border-radius: 0.75rem;
                     "
                     onsubmit="
@@ -188,7 +188,7 @@
             {{else if eq .Role "doer"}}
                 <div
                     style="
-                        background: rgba(255,255,255,0.1);
+                        background: var(--border-soft);
                         padding: 1rem 2rem;
                         border-radius: 9999px;
                         font-weight: bold;
@@ -218,7 +218,7 @@
         style="
             margin-top: 3rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid var(--border-soft);
         "
     >
         Service Details

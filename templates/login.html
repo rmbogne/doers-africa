@@ -1,27 +1,182 @@
 {{define "content"}}
+
+{{if .RegistrationSuccessful}}
+    <div
+        id="registration-success"
+        role="status"
+        aria-live="polite"
+        style="
+            position: fixed;
+            top: 6rem;
+            right: 1.5rem;
+            z-index: 2000;
+            width: min(420px, calc(100vw - 3rem));
+            padding: 1rem 1.25rem;
+            border: 1px solid #a8dfca;
+            border-radius: 1rem;
+            background: #e9f9f2;
+            box-shadow: 0 18px 45px rgba(35, 71, 108, 0.18);
+            color: #146c52;
+        "
+    >
+        <div
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 1rem;
+            "
+        >
+            <div>
+                <strong
+                    style="
+                        display: block;
+                        margin-bottom: 0.25rem;
+                    "
+                >
+                    Account created successfully
+                </strong>
+
+                <span>
+                    Your account is ready. You can now log in.
+                </span>
+            </div>
+
+            <button
+                type="button"
+                aria-label="Close confirmation"
+                onclick="document.getElementById('registration-success').remove();"
+                style="
+                    width: auto;
+                    min-height: auto;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    color: #146c52;
+                    font-size: 1.35rem;
+                    cursor: pointer;
+                "
+            >
+                &times;
+            </button>
+        </div>
+    </div>
+
+    <script>
+        window.setTimeout(function () {
+            const confirmation =
+                document.getElementById("registration-success");
+
+            if (confirmation) {
+                confirmation.remove();
+            }
+        }, 7000);
+    </script>
+{{end}}
+
 <div class="form-container">
     <h2>Welcome Back</h2>
-    <p class="text-muted" style="margin-bottom: 2rem;">Login to your account</p>
+
+    <p
+        class="text-muted"
+        style="margin-bottom: 2rem;"
+    >
+        Log in to your account
+    </p>
+
     <form action="/login" method="POST">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{.CSRFToken}}"
+        >
+
         <div class="form-group">
-            <label for="role">I am a:</label>
-            <select name="role" id="role" class="form-control" required>
-                <option value="customer">Customer / Attendee</option>
-                <option value="doer">Doer / Organizer</option>
+            <label for="role">
+                I am a:
+            </label>
+
+            <select
+                name="role"
+                id="role"
+                class="form-control"
+                required
+            >
+                <option value="customer">
+                    Customer / Attendee
+                </option>
+
+                <option value="doer">
+                    Doer / Organizer
+                </option>
             </select>
         </div>
+
         <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" class="form-control" required placeholder="you@example.com">
+            <label for="email">
+                Email
+            </label>
+
+            <input
+                type="email"
+                id="email"
+                name="email"
+                class="form-control"
+                required
+                maxlength="254"
+                autocomplete="email"
+                placeholder="you@example.com"
+            >
         </div>
+
         <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" class="form-control" required placeholder="••••••••">
+            <label for="password">
+                Password
+            </label>
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                class="form-control"
+                required
+                maxlength="128"
+                autocomplete="current-password"
+                placeholder="••••••••"
+            >
         </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+
+        <p style="margin-top: 1rem; text-align:center:">
+            <a href="/forgot-password">
+                Forgot password ?
+            </a>
+        </p>
+
+        <button
+            type="submit"
+            class="btn btn-primary"
+            style="width: 100%;"
+        >
+            Sign In
+        </button>
     </form>
-    <p style="margin-top: 1.5rem; text-align: center; color: var(--text-muted);">
-        Don't have an account? <a href="/register" style="color: var(--primary-color);">Register here</a>
+
+    <p
+        style="
+            margin-top: 1.5rem;
+            text-align: center;
+            color: var(--text-muted);
+        "
+    >
+        Don't have an account?
+
+        <a
+            href="/register"
+            style="color: var(--accent);"
+        >
+            Register here
+        </a>
     </p>
 </div>
+
 {{end}}

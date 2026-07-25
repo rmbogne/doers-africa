@@ -1,83 +1,548 @@
 {{define "content"}}
+
+{{if .RegistrationError}}
+<div
+    id="registration-error"
+    role="alert"
+    aria-live="assertive"
+    style="
+        position: fixed;
+        top: 6rem;
+        right: 1.5rem;
+        z-index: 2000;
+        width: min(440px, calc(100vw - 3rem));
+        padding: 1rem 1.25rem;
+        border: 1px solid #efb6b1;
+        border-radius: 1rem;
+        background: #fff0ee;
+        box-shadow: 0 18px 45px rgba(35, 71, 108, 0.18);
+        color: #b42318;
+    "
+>
+    <div
+        style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        "
+    >
+        <div>
+            <strong
+                style="
+                    display: block;
+                    margin-bottom: 0.25rem;
+                "
+            >
+                Registration could not be completed
+            </strong>
+
+            <span>{{.RegistrationError}}</span>
+        </div>
+
+        <button
+            type="button"
+            aria-label="Close registration error"
+            onclick="document.getElementById('registration-error').remove();"
+            style="
+                width: auto;
+                min-height: auto;
+                padding: 0;
+                border: 0;
+                background: transparent;
+                color: #b42318;
+                font-size: 1.35rem;
+                cursor: pointer;
+            "
+        >
+            &times;
+        </button>
+    </div>
+</div>
+{{end}}
+
 <div class="form-container">
     <h2>Create an Account</h2>
-    <p class="text-muted" style="margin-bottom: 2rem;">Join the African Doers network</p>
-    <form action="/register" method="POST" enctype="multipart/form-data">
+
+    <p
+        class="text-muted"
+        style="margin-bottom: 2rem;"
+    >
+        Join the African Doers network
+    </p>
+
+    <form
+        id="registration-form"
+        action="/register"
+        method="POST"
+        enctype="multipart/form-data"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{.CSRFToken}}"
+        >
+
+        <div
+            id="registration-client-error"
+            role="alert"
+            aria-live="assertive"
+            style="
+                display: none;
+                margin-bottom: 1rem;
+                padding: 0.85rem 1rem;
+                border: 1px solid #efb6b1;
+                border-radius: 0.75rem;
+                background: #fff0ee;
+                color: #b42318;
+            "
+        ></div>
+
         <div class="form-group">
             <label for="role">I want to:</label>
-            <select name="role" id="role" class="form-control" required onchange="toggleDoerFields()">
-                <option value="customer">Attend Events / Hire Services (Customer)</option>
-                <option value="doer">Host Events / Offer Services (Doer)</option>
+
+            <select
+                name="role"
+                id="role"
+                class="form-control"
+                required
+            >
+                <option
+                    value="customer"
+                    {{if ne .RegistrationRole "doer"}}selected{{end}}
+                >
+                    Attend Events / Hire Services (Customer)
+                </option>
+
+                <option
+                    value="doer"
+                    {{if eq .RegistrationRole "doer"}}selected{{end}}
+                >
+                    Host Events / Offer Services (Doer)
+                </option>
             </select>
         </div>
+
         <div class="form-group">
-            <label id="name-label" for="name">Full Name</label>
-            <input type="text" id="name" name="name" class="form-control" required placeholder="Your Name">
-        </div>
-        <div class="form-group">
-            <label for="email">Email address</label>
-            <input type="email" id="email" name="email" class="form-control" required placeholder="you@domain.com">
-        </div>
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" class="form-control" required placeholder="Create a strong password">
+            <label id="name-label" for="name">
+                Full Name
+            </label>
+
+            <input
+                type="text"
+                id="name"
+                name="name"
+                class="form-control"
+                required
+                minlength="2"
+                maxlength="100"
+                autocomplete="name"
+                placeholder="Your Name"
+            >
         </div>
 
-        <div id="doer-fields" style="display: none; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 1rem;">
-            <h3 style="margin-bottom: 1rem;">Doer Details</h3>
+        <div class="form-group">
+            <label for="email">
+                Email address
+            </label>
+
+            <input
+                type="email"
+                id="email"
+                name="email"
+                class="form-control"
+                required
+                maxlength="254"
+                autocomplete="email"
+                placeholder="you@domain.com"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="password">
+                Password
+            </label>
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                class="form-control"
+                required
+                minlength="12"
+                maxlength="72"
+                autocomplete="new-password"
+                aria-describedby="password-requirements"
+                placeholder="Create a strong password"
+            >
+
+            <small
+                id="password-requirements"
+                class="text-muted"
+                style="
+                    display: block;
+                    margin-top: 0.4rem;
+                    line-height: 1.5;
+                "
+            >
+                Use at least 12 characters. Passwords must not exceed
+                72 bytes.
+            </small>
+        </div>
+
+        <div
+            id="doer-fields"
+            style="
+                display: none;
+                padding-top: 1rem;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                margin-top: 1rem;
+            "
+        >
+            <h3 style="margin-bottom: 1rem;">
+                Doer Details
+            </h3>
+
             <div class="form-group">
-                <label for="category">Category of Service</label>
-                <select name="category" id="category" class="form-control">
-                    <option value="Food">Food</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Sport and Leisure">Sport and Leisure</option>
-                    <option value="Beauty">Beauty</option>
+                <label for="category">
+                    Category of Service
+                </label>
+
+                <select
+                    name="category"
+                    id="category"
+                    class="form-control"
+                    data-doer-required
+                >
+                    <option value="">
+                        Select a service category
+                    </option>
+
+                    <option value="Food">
+                        Food
+                    </option>
+
+                    <option value="Entertainment">
+                        Entertainment
+                    </option>
+
+                    <option value="Sport and Leisure">
+                        Sport and Leisure
+                    </option>
+
+                    <option value="Beauty">
+                        Beauty
+                    </option>
                 </select>
             </div>
+
             <div class="form-group">
-                <label for="description">Description of Offer</label>
-                <textarea id="description" name="description" class="form-control" rows="3" placeholder="Describe your services..."></textarea>
+                <label for="description">
+                    Description of Offer
+                </label>
+
+                <textarea
+                    id="description"
+                    name="description"
+                    class="form-control"
+                    rows="3"
+                    minlength="10"
+                    maxlength="2000"
+                    placeholder="Describe your services..."
+                    data-doer-required
+                ></textarea>
             </div>
+
             <div class="form-group">
-                <label for="zipcode">Zip Code (e.g. 10001)</label>
-                <input type="text" id="zipcode" name="zipcode" class="form-control" placeholder="10001">
+                <label for="zipcode">
+                    Zip Code (e.g. 10001)
+                </label>
+
+                <input
+                    type="text"
+                    id="zipcode"
+                    name="zipcode"
+                    class="form-control"
+                    maxlength="12"
+                    autocomplete="postal-code"
+                    placeholder="10001"
+                    data-doer-required
+                >
             </div>
+
             <div class="form-group">
-                <label for="radius">Radius of Availability (miles)</label>
-                <input type="number" id="radius" name="radius" class="form-control" placeholder="50">
+                <label for="radius">
+                    Radius of Availability (miles)
+                </label>
+
+                <input
+                    type="number"
+                    id="radius"
+                    name="radius"
+                    class="form-control"
+                    min="0"
+                    max="500"
+                    step="1"
+                    placeholder="50"
+                    data-doer-required
+                >
             </div>
+
             <div class="form-group">
-                <label>Social Networks (Optional)</label>
-                <input type="text" name="facebook" class="form-control" placeholder="Facebook URL" style="margin-bottom: 0.5rem;">
-                <input type="text" name="tiktok" class="form-control" placeholder="TikTok Handle" style="margin-bottom: 0.5rem;">
-                <input type="text" name="instagram" class="form-control" placeholder="Instagram Handle">
+                <label>
+                    Social Networks (Optional)
+                </label>
+
+                <input
+                    type="url"
+                    id="facebook"
+                    name="facebook"
+                    class="form-control"
+                    maxlength="2048"
+                    autocomplete="url"
+                    placeholder="Facebook URL"
+                    style="margin-bottom: 0.5rem;"
+                >
+
+                <input
+                    type="text"
+                    id="tiktok"
+                    name="tiktok"
+                    class="form-control"
+                    maxlength="100"
+                    placeholder="TikTok Handle"
+                    style="margin-bottom: 0.5rem;"
+                >
+
+                <input
+                    type="text"
+                    id="instagram"
+                    name="instagram"
+                    class="form-control"
+                    maxlength="100"
+                    placeholder="Instagram Handle"
+                >
             </div>
+
             <div class="form-group">
-                <label for="flyer">Flyer (Image Upload)</label>
-                <input type="file" id="flyer" name="flyer" class="form-control" accept="image/*" style="padding: 0.5rem;">
+                <label for="flyer">
+                    Flyer (Image Upload)
+                </label>
+
+                <input
+                    type="file"
+                    id="flyer"
+                    name="flyer"
+                    class="form-control"
+                    accept="image/jpeg,image/png"
+                    aria-describedby="flyer-requirements"
+                    style="padding: 0.5rem;"
+                >
+
+                <small
+                    id="flyer-requirements"
+                    class="text-muted"
+                    style="
+                        display: block;
+                        margin-top: 0.4rem;
+                    "
+                >
+                    Optional JPEG or PNG image. Maximum size: 2 MB.
+                </small>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
+        <button
+            type="submit"
+            class="btn btn-primary"
+            style="
+                width: 100%;
+                margin-top: 1rem;
+            "
+        >
+            Create Account
+        </button>
     </form>
-    
-    <script>
-    function toggleDoerFields() {
-        var role = document.getElementById('role').value;
-        var nameLabel = document.getElementById('name-label');
-        var fields = document.getElementById('doer-fields');
-        if (role === 'doer') {
-            fields.style.display = 'block';
-            nameLabel.innerText = 'Service Name / Provider Name';
-        } else {
-            fields.style.display = 'none';
-            nameLabel.innerText = 'Full Name';
-        }
-    }
-    document.addEventListener("DOMContentLoaded", toggleDoerFields);
-    </script>
-    <p style="margin-top: 1.5rem; text-align: center; color: var(--text-muted);">
-        Already have an account? <a href="/login" style="color: var(--primary-color);">Login here</a>
+
+    <p
+        style="
+            margin-top: 1.5rem;
+            text-align: center;
+            color: var(--text-muted);
+        "
+    >
+        Already have an account?
+
+        <a
+            href="/login"
+            style="color: var(--accent);"
+        >
+            Login here
+        </a>
     </p>
 </div>
+
+<script>
+(function () {
+    "use strict";
+
+    const role =
+        document.getElementById("role");
+
+    const nameLabel =
+        document.getElementById("name-label");
+
+    const doerFields =
+        document.getElementById("doer-fields");
+
+    const form =
+        document.getElementById("registration-form");
+
+    const password =
+        document.getElementById("password");
+
+    const flyer =
+        document.getElementById("flyer");
+
+    const clientError =
+        document.getElementById(
+            "registration-client-error"
+        );
+
+    const maximumFlyerBytes =
+        2 * 1024 * 1024;
+
+    function showClientError(message) {
+        clientError.textContent = message;
+        clientError.style.display = "block";
+
+        clientError.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+    }
+
+    function clearClientError() {
+        clientError.textContent = "";
+        clientError.style.display = "none";
+    }
+
+    function toggleDoerFields() {
+        const isDoer =
+            role.value === "doer";
+
+        doerFields.style.display =
+            isDoer ? "block" : "none";
+
+        nameLabel.textContent =
+            isDoer
+                ? "Service Name / Provider Name"
+                : "Full Name";
+
+        doerFields
+            .querySelectorAll("input, select, textarea")
+            .forEach(function (field) {
+                field.disabled = !isDoer;
+            });
+
+        doerFields
+            .querySelectorAll("[data-doer-required]")
+            .forEach(function (field) {
+                field.required = isDoer;
+            });
+    }
+
+    function passwordByteLength(value) {
+        return new TextEncoder()
+            .encode(value)
+            .length;
+    }
+
+    role.addEventListener(
+        "change",
+        function () {
+            clearClientError();
+            toggleDoerFields();
+        }
+    );
+
+    flyer.addEventListener(
+        "change",
+        function () {
+            clearClientError();
+
+            const selectedFile =
+                flyer.files[0];
+
+            if (
+                selectedFile &&
+                selectedFile.size >
+                    maximumFlyerBytes
+            ) {
+                flyer.value = "";
+
+                showClientError(
+                    "The selected flyer exceeds the 2 MB limit."
+                );
+            }
+        }
+    );
+
+    form.addEventListener(
+        "submit",
+        function (event) {
+            clearClientError();
+
+            if (
+                Array.from(password.value).length < 12
+            ) {
+                event.preventDefault();
+
+                showClientError(
+                    "Your password must contain at least 12 characters."
+                );
+
+                password.focus();
+                return;
+            }
+
+            if (
+                passwordByteLength(
+                    password.value
+                ) > 72
+            ) {
+                event.preventDefault();
+
+                showClientError(
+                    "Your password must not exceed 72 bytes."
+                );
+
+                password.focus();
+                return;
+            }
+
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                form.reportValidity();
+            }
+        }
+    );
+
+    toggleDoerFields();
+
+    const serverError =
+        document.getElementById(
+            "registration-error"
+        );
+
+    if (serverError) {
+        window.setTimeout(function () {
+            if (serverError.isConnected) {
+                serverError.remove();
+            }
+        }, 7000);
+    }
+}());
+</script>
+
 {{end}}

@@ -6,6 +6,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+const (
+	ServiceRequestStatusPending   = "pending"
+	ServiceRequestStatusAccepted  = "accepted"
+	ServiceRequestStatusRejected  = "rejected"
+	ServiceRequestStatusCancelled = "cancelled"
+	ServiceRequestStatusCompleted = "completed"
+)
+
 type Doer struct {
 	ID           int
 	Name         string
@@ -54,14 +62,6 @@ type RSVP struct {
 	CustomerID int
 }
 
-const (
-	ServiceRequestStatusPending   = "pending"
-	ServiceRequestStatusAccepted  = "accepted"
-	ServiceRequestStatusRejected  = "rejected"
-	ServiceRequestStatusCancelled = "cancelled"
-	ServiceRequestStatusCompleted = "completed"
-)
-
 type ServiceRequest struct {
 	ID int64
 
@@ -82,4 +82,14 @@ type ServiceRequest struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type PasswordResetToken struct {
+	ID        int64
+	UserID    int
+	Role      string
+	TokenHash string
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedAt time.Time
 }
